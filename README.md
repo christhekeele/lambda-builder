@@ -3,7 +3,21 @@ Knock Lambda Builder
 
 This repository hosts the `Makefile` build tool for Knock's serverless apps.
 
-Copy it into new projects and run `make setup` to get cooking.
+Copy it into new projects and run `make help` to get cooking.
+Or, to quick-start, try:
+
+```bash
+# Ensure we have the right commands installed
+make check
+# Build out new project
+make setup
+# Create new function
+FUNCTIONS=function/hello/world.py make functions
+# Build project
+make build
+# Run server
+./bin/server
+```
 
 Our serverless apps are written with the following assumptions:
 
@@ -28,8 +42,8 @@ project
 ├── config.yml                  <-- Top-level CloudFormation configuration
 ├── build/                      <-- Build artifacts get placed here
 ├── envs/                       <-- Build-environment-specific .env files go here
-├── functions/                  <-- One file per lambda function
-├── machines/                   <-- One file per step function state machine
+├── function/                   <-- One file per lambda function
+├── machine/                    <-- One file per step function state machine
 ├── lib/                        <-- Common code gets extracted here
 └── tests/                      <-- Project tests mirror top-level layout
 ```

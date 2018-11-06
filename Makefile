@@ -43,7 +43,7 @@ STRICT ?= FALSE
 # What environment to build for
 BUILD_ENV ?= dev
 # Which files to assume are functions
-FUNCTIONS ?= $(shell find functions \
+FUNCTIONS ?= $(shell find function \
   -type f \
   -iname "*.py" \
   ! -iname "__init__.py" \
@@ -122,11 +122,13 @@ CHECK_SUBCOMMANDS += check-executables
 
 CHECK_EXECUTABLES := git pip zip docker aws sam fswatch
 check-executables:
-  $(MAKE) --ignore-errors --keep-going ${CHECK_EXECUTABLES}
+  @echo Checking for executables: ${CHECK_EXECUTABLES}
+  @$(MAKE) --ignore-errors --keep-going ${CHECK_EXECUTABLES}
 
 .PHONY: ${CHECK_EXECUTABLES}
 ${CHECK_EXECUTABLES}:
   @type $@ 1>/dev/null && [[ -x $$(type -p $@) ]]
+
 
 # Check command: make check
 .PHONY: check
@@ -169,7 +171,7 @@ setup-git: ${SETUP_GIT}
 SUBCOMMANDS += setup-structure
 SETUP_SUBCOMMANDS += setup-structure
 
-SETUP_STRUCTURE := bin envs functions lib tests
+SETUP_STRUCTURE := bin envs function lib tests
 setup-structure: ${SETUP_STRUCTURE}
   @echo Setup project structure.
 
@@ -213,8 +215,8 @@ SETUP_BOILERPLATE += envs/dev.env
 envs/dev.env: | envs
   @touch $@
 
-SETUP_BOILERPLATE += functions/__init__.py
-functions/__init__.py: | functions
+SETUP_BOILERPLATE += function/__init__.py
+function/__init__.py: | function
   @echo import sys > $@
   @echo sys.path.append("lib") >> $@
 
@@ -258,7 +260,7 @@ setup: ${SETUP_SUBCOMMANDS}
 ##
 
 FUNCTION_FILES = $(call normalize,$(call split-list,${FUNCTIONS}))
-FUNCTION_PATHS = $(patsubst functions/%,%,${FUNCTION_FILES})
+FUNCTION_PATHS = $(patsubst function/%,%,${FUNCTION_FILES})
 FUNCTION_DIRS = $(basename ${FUNCTION_PATHS})
 FUNCTION_NAMES = $(foreach function_dir,${FUNCTION_DIRS}, \
   $(call build-env-fun-name,${BUILD_ENV},${function_dir}) \
@@ -280,7 +282,7 @@ BUILD_SUBCOMMANDS += build-functions
 BUILD_FUNCTIONS = $(addsuffix /function.py,${BUILD_FUNCTION_DIRS})
 build-functions: ${BUILD_FUNCTIONS}
 
-${BUILD_FUNCTIONS}: ${BUILD_DIR}/%/function.py: functions/%.py | ${BUILD_DIR}/% functions
+${BUILD_FUNCTIONS}: ${BUILD_DIR}/%/function.py: function/%.py | ${BUILD_DIR}/% function
   @cp -f $< $@
 
 
@@ -339,7 +341,7 @@ $(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
 
 define RULE_UPDATE_FUNCTION_DEPENDENCIES
 $1/%: ${BUILD_DIR}/dependencies/% | $1 ${BUILD_DIR}/dependencies
-  cp -rf $$< $$@
+  @cp -rf $$< $$@
 endef
 $(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
   $(eval $(call RULE_UPDATE_FUNCTION_DEPENDENCIES,${build_function_dir})) \
@@ -359,13 +361,13 @@ build-config: ${BUILD_CONFIG}
 
 ${BUILD_CONFIG}:: %/template.yml: config.yml ${BUILD_FUNCTION_CONFIGS} | % sam
   @cat config.yml > $@
-  @echo >> $@
+  @echo '' >> $@
   @echo 'Resources:' >> $@
-  @echo >> $@
+  @echo '' >> $@
   @$(foreach fun_config,$(call tail,$^), \
     echo '$(hash) ${fun_config}' | sed 's/\(.*\)/  \1/' >> $@; \
     cat ${fun_config} | sed 's/\(.*\)/  \1/' >> $@; \
-    echo >> $@; \
+    echo '' >> $@; \
   )
   @sam validate --template $@ 2>&1
 
@@ -406,7 +408,7 @@ build: ${BUILD_SUBCOMMANDS} | ${BUILD_DIR}/dependencies
 .PHONY: clean
 COMMANDS += clean
 INFO_CLEAN = Removes build artifacts
-define HELP_CLEAN
+export define HELP_CLEAN
 Destroys the ${BUILD_DIR} directory.
 endef
 
@@ -422,7 +424,7 @@ clean:
 .PHONY: template
 COMMANDS += template
 INFO_TEMPLATE = Prints path to built project template
-define HELP_TEMPLATE
+export define HELP_TEMPLATE
 Prints the path to the AWS CloudConfiguration template file.
 endef
 
@@ -435,18 +437,24 @@ template:
 ##
 
 # Funtion command: make function
-.PHONY: function
-COMMANDS += function
-INFO_FUNCTION = Prints function names
-define HELP_FUNCTION
-Prints the AWS resource name of each lambda function.
+.PHONY: functions
+COMMANDS += functions
+INFO_FUNCTIONS = Prints function names
+export define HELP_FUNCTIONS
+Prints the AWS resource name of each lambda function,
+creating a starter function if the file does not yet
+exist.
 
 Can be restricted to only certain functions by specifying:
 FUNCTIONS=path/to/function.file
 endef
 
-function:
+functions: ${FUNCTIONS}
   @echo ${FUNCTION_NAMES}
+
+${FUNCTIONS}:
+  @mkdir -p $(dir $@)
+  $(file > $@,$(call FUNCTION_FILE))
 
 
 ####
@@ -457,7 +465,7 @@ function:
 .PHONY: help
 COMMANDS += help
 INFO_HELP = Prints this help
-define HELP_HELP
+export define HELP_HELP
 Prints a helpful listing of all commands.
 endef
 
@@ -466,14 +474,13 @@ HELP_INFO_COMMANDS = $(addprefix help-info-,${COMMANDS})
 
 help: STRICT ?= FALSE
 help: | help-commands
-  @echo
-  @echo For more information on a given command, run:
-  @echo make help-command-<command>
+  @echo $$'\nFor more information on a given command, run:'
+  @echo 'make help-command-<command>'
 
 # Help subcommand: make help-commands
 help-commands:
-  @echo Available commands:
-  @echo
+  @echo 'Available commands:'
+  @echo ''
   @$(MAKE) ${HELP_INFO_COMMANDS}
 
 .PHONY: ${HELP_INFO_COMMANDS}
@@ -484,7 +491,7 @@ ${HELP_INFO_COMMANDS}: help-info-%:
 .PHONY: ${HELP_COMMANDS}
 ${HELP_COMMANDS}: help-command-%:
   @echo USAGE: make $*
-  @echo
+  @echo ''
   @echo "$$HELP_$(call upcase,$*)"
 
 ####
@@ -576,32 +583,34 @@ endef # SETUP_CONFIG_YML_FILE
 
 define SETUP_BINSTUBS_SERVER_FILE
 #!/usr/bin/env bash
-BUILD_ENV=$${BUILD_ENV:-dev}
+export BUILD_ENV=$${BUILD_ENV:-dev}
 
-make BUILD_ENV=$$BUILD_ENV build
+make build
 
-template=$$(make FUNCTIONS=$$function_file BUILD_ENV=$$BUILD_ENV template)
+template=$$(make template)
 
-sam local start-api --template $$template
+sam local start-api --template $$template "$${@:1}"
+
 endef # SETUP_BINSTUBS_SERVER_FILE
 
 
 define SETUP_BINSTUBS_RUN_FILE
 #!/usr/bin/env bash
-BUILD_ENV=$${BUILD_ENV:-dev}
+export BUILD_ENV=$${BUILD_ENV:-dev}
 
 if [ -z "$$1" ]; then
   echo "Must specify a function file to run."
   exit 1
 fi
-function_file=$$1
+export FUNCTIONS=$$1
 
-make FUNCTIONS=$$function_file BUILD_ENV=$$BUILD_ENV build
+make build
 
-function=$$(make FUNCTIONS=$$function_file BUILD_ENV=$$BUILD_ENV function)
-template=$$(make FUNCTIONS=$$function_file BUILD_ENV=$$BUILD_ENV template)
+function=$$(make functions)
+template=$$(make template)
 
-sam local invoke --template $$template "$$function"
+sam local invoke --template $$template "$$function" "$${@:2}"
+
 endef # SETUP_BINSTUBS_RUN_FILE
 
 
@@ -613,11 +622,12 @@ endef # SETUP_BINSTUBS_DEBUG_FILE
 
 define SETUP_BINSTUBS_WATCH_FILE
 #!/usr/bin/env bash
-BUILD_ENV=$${BUILD_ENV:-dev}
-CMD=$${CMD:-make BUILD_ENV=$$BUILD_ENV build}
+export BUILD_ENV=$${BUILD_ENV:-dev}
+
+CMD=$${CMD:-make build}
 
 echo $$'Watching the filesystem for changes...'
-fswatch -r functions lib requirements.txt config.yml \
+fswatch -r function lib requirements.txt config.yml \
   --one-per-batch \
   -e pycache -e .pyc \
   --event 512 --event 516 | while read num
@@ -642,6 +652,18 @@ define SETUP_BINSTUBS_LINT_FILE
 #!/usr/bin/env bash
 
 endef # SETUP_BINSTUBS_LINT_FILE
+
+
+define FUNCTION_FILE
+import json
+
+# Required handler function
+
+def handler(event=None, context=None):
+  # Threading a 'body' with JSON payload keeps API Gateway happy
+  return {'body': json.dumps({'result': event})}
+
+endef # FUNCTION_FILE
 
 
 # Function Resource Template
