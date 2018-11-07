@@ -57,8 +57,8 @@ LIBRARIES ?= $(shell find lib \
 )
 
 # Other variables:
-SCRIPTS := server run watch lint
-# SCRIPTS += test deploy
+SCRIPTS := server run watch lint deploy
+# SCRIPTS += test
 
 #####################
 # UTILITY FUNCTIONS:
@@ -101,10 +101,6 @@ upcase = $(shell echo "$1" | tr '[:lower:]' '[:upper:]')
 titleize = $(shell STR="$(call downcase,$1)"; LIST=( $$STR ); echo "$${LIST[@]^}")
 # Converts $1: pathlist into a camelcased words
 camelize-path = $(subst $(space),,$(call titleize,$(subst /,$(space),$1)))
-# Same as above but with a merged $1: dirlist $2: pathlist
-dir-merge-camelize-path = $(call camelize-path,$(call dir-merge,$1,$2))
-# Same as above but with prepended $1 env name to $2 path
-build-env-fun-name = $(call dir-merge-camelize-path,$1,$2)
 
 
 ###########
@@ -173,7 +169,7 @@ setup-git: ${SETUP_GIT}
 SUBCOMMANDS += setup-structure
 SETUP_SUBCOMMANDS += setup-structure
 
-SETUP_STRUCTURE := bin envs function lib tests
+SETUP_STRUCTURE := bin config envs function lib tests
 setup-structure: ${SETUP_STRUCTURE}
   @echo Setup project structure.
 
@@ -200,13 +196,17 @@ SETUP_BOILERPLATE += .python-version
 .python-version:
   @echo 3.6.7 > $@
 
-SETUP_BOILERPLATE += config.yml
-config.yml:
-  $(file > $@,${SETUP_CONFIG_YML_FILE})
+SETUP_BOILERPLATE += config/template.yml
+config/template.yml: | config
+  $(file > $@,${SETUP_CONFIG_TEMPLATE_YML_FILE})
 
-SETUP_BOILERPLATE += resources.yml
-resources.yml:
-  $(file > $@,${SETUP_RESOURCES_YML_FILE})
+SETUP_BOILERPLATE += config/resources.yml
+config/resources.yml: | config
+  $(file > $@,${SETUP_CONFIG_RESOURCES_YML_FILE})
+
+SETUP_BOILERPLATE += config/function.yml
+config/function.yml: | config
+  $(file > $@,${SETUP_CONFIG_FUNCTION_YML_FILE})
 
 SETUP_BOILERPLATE += README.md
 README.md:
@@ -269,7 +269,7 @@ FUNCTION_FILES = $(call normalize,$(call split-list,${FUNCTIONS}))
 FUNCTION_PATHS = $(patsubst function/%,%,${FUNCTION_FILES})
 FUNCTION_DIRS = $(basename ${FUNCTION_PATHS})
 FUNCTION_NAMES = $(foreach function_dir,${FUNCTION_DIRS}, \
-  $(call build-env-fun-name,${BUILD_ENV},${function_dir}) \
+  $(call camelize-path,${function_dir}) \
 ) \
 
 BUILD_DIR = $(call dir-merge,build,${BUILD_ENV})
@@ -365,29 +365,51 @@ BUILD_CONFIG = ${BUILD_DIR}/template.yml
 export TEMPLATE_FILE = ${BUILD_DIR}/template.yml
 build-config: ${BUILD_CONFIG}
 
-${BUILD_CONFIG}: config.yml resources.yml
+${BUILD_CONFIG}: config/template.yml config/resources.yml
 ${BUILD_CONFIG}: ${BUILD_FUNCTION_CONFIGS}
 ${BUILD_CONFIG}: %/template.yml: | % sam
-  @echo '$(hash) config.yml' > $@
-  @cat config.yml >> $@
+  @echo '$(hash) config/template.yml' > $@
+  @cat config/template.yml \
+    | sed 's|\$${ENV}|${BUILD_ENV}|g' >> $@
   @echo '' >> $@
   @echo 'Resources:' >> $@
   @echo '' >> $@
-  @$(foreach fun_config,$(call tail,$^), \
-    echo '$(hash) ${fun_config}' | sed 's/\(.*\)/  \1/' >> $@; \
-    cat ${fun_config} | sed 's/\(.*\)/  \1/' >> $@; \
+  @echo '$(hash) Non-Lambda Resources:' \
+    | sed 's|\(.*\)|  \1|' >> $@
+  @echo '' >> $@
+  @echo '$(hash) config/resources.yml' \
+    | sed 's|\(.*\)|  \1|' >> $@
+  @cat config/resources.yml \
+    | sed 's|\$${ENV}|${BUILD_ENV}|g' \
+    | sed 's|\(.*\)|  \1|' >> $@
+  @echo '' >> $@
+  @echo '$(hash) Lambda Resources:' \
+    | sed 's|\(.*\)|  \1|' >> $@
+  @echo '' >> $@
+  @$(foreach function_dir,${FUNCTION_DIRS}, \
+    echo '$(hash) function/${function_dir}.yml' \
+      | sed 's|\(.*\)|  \1|' >> $@; \
+    cat ${BUILD_DIR}/${function_dir}/function.yml \
+      | sed 's|\$${ENV}|${BUILD_ENV}|g' \
+      | sed 's|\$${NAME}|$(call camelize-path,${function_dir})|g' \
+      | sed 's|\$${PATH}|${function_dir}|g' \
+      | sed 's|\(.*\)|  \1|' >> $@; \
     echo '' >> $@; \
   )
   @sam validate --template $@ 2>&1
 
 define RULE_BUILD_FUNCTION_CONFIG
-# Don't worry about actually building sideloaded function configuration
+# Don't worry about actually building function configuration overrides
 function/$1.yml:
   @:
-# Instead, use our template and write over that if such a config exists
-${BUILD_DIR}/$1/function.yml: ${BUILD_DIR}/%/function.yml: function/%.yml | ${BUILD_DIR}/$1
-  $$(file > $$@,$$(call RESOURCE_CONFIG_TEMPLATE,$$(call build-env-fun-name,${BUILD_ENV},$1),$1))
-  @if [ -e function/$$*.yml ]; then cp -f function/$$*.yml $$@; fi
+# Instead, use overrides if it exists, else use the base config
+${BUILD_DIR}/$1/function.yml: ${BUILD_DIR}/%/function.yml: function/%.yml | ${BUILD_DIR}/$1 config/function.yml
+  @if [ -e function/$$*.yml ]; \
+  then \
+    cp -f function/$$*.yml $$@; \
+  else \
+    cp -f config/function.yml $$@; \
+  fi
 endef
 $(foreach function_dir,${FUNCTION_DIRS}, \
   $(eval $(call RULE_BUILD_FUNCTION_CONFIG,${function_dir})) \
@@ -604,7 +626,10 @@ requests==2.18.4
 endef # SETUP_REQUIREMENTS_TXT_FILE
 
 
-define SETUP_CONFIG_YML_FILE
+define SETUP_CONFIG_TEMPLATE_YML_FILE
+# Variables:
+#  $${ENV}: the value of BUILD_ENV at build time
+
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
@@ -616,13 +641,41 @@ Globals:
 
 # Resources: will be appended to the end of this file
 
-endef # SETUP_CONFIG_YML_FILE
+endef # SETUP_CONFIG_TEMPLATE_YML_FILE
 
 
-define SETUP_RESOURCES_YML_FILE
-# Non-Lambda Resources:
+define SETUP_CONFIG_RESOURCES_YML_FILE
+# Variables:
+#  $${ENV}: the value of BUILD_ENV at build time
+
+# Additional resources go here
 
 endef # SETUP_RESOURCES_YML_FILE
+
+
+define SETUP_CONFIG_FUNCTION_YML_FILE
+# Variables:
+#  $${ENV}: the value of BUILD_ENV at build time
+#  $${NAME}: the lambda function's name
+#  $${PATH}: the path to the function within the functions folder
+$${NAME}: &$${NAME}
+  Type: AWS::Serverless::Function
+  Properties:
+    CodeUri: $${PATH}
+    Handler: function.handler
+    Events:
+      Get$${NAME}:
+        Type: Api
+        Properties:
+          Path: /$${PATH}/{extra+}
+          Method: get
+      Post$${NAME}:
+        Type: Api
+        Properties:
+          Path: /$${PATH}/{extra+}
+          Method: post
+
+endef # SETUP_CONFIG_FUNCTION_YML_FILE
 
 
 define SETUP_BINSTUBS_SERVER_FILE
@@ -675,10 +728,32 @@ export FUNCTIONS=$$1
 endef # SETUP_BINSTUBS_RUN_FILE
 
 
-define SETUP_BINSTUBS_DEBUG_FILE
+define SETUP_BINSTUBS_DEPLOY_FILE
 #!/usr/bin/env bash
+export BUILD_ENV=$${BUILD_ENV:-dev}
 
-endef # SETUP_BINSTUBS_DEBUG_FILE
+HELP=$$(cat <<-HELP
+Runs 'sam local invoke' te execute the specified function file
+against the current BUILD_ENV ($$BUILD_ENV).
+
+All other provided command-line options are passed on to it.
+HELP
+)
+
+if [[ "$$1" == help ]]; then
+  echo "$$HELP"
+  exit 0
+fi
+
+if [ -z "$$1" ]; then
+  echo "Must specify a function file to run."
+  exit 1
+fi
+export FUNCTIONS=$$1
+
+(set -x; sam local invoke --template $$(make template) $$(make functions) "$${@:2}")
+
+endef # SETUP_BINSTUBS_DEPLOY_FILE
 
 
 define SETUP_BINSTUBS_WATCH_FILE
@@ -771,27 +846,3 @@ def handler(event=None, context=None):
   return {'body': json.dumps({'result': event})}
 
 endef # FUNCTION_FILE
-
-
-# Function Resource Template
-# $1: fun name
-# $2: fun path
-define RESOURCE_CONFIG_TEMPLATE
-$1: &$1
-  Type: AWS::Serverless::Function
-  Properties:
-    CodeUri: $2
-    Handler: function.handler
-    Events:
-      Get$1:
-        Type: Api
-        Properties:
-          Path: /$2
-          Method: get
-      Post$1:
-        Type: Api
-        Properties:
-          Path: /$2
-          Method: post
-
-endef
