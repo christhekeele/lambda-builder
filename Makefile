@@ -17,6 +17,8 @@ export MAKESHELL := ${SHELL}
 .RECIPEPREFIX +=
 # Invoke help by default
 .DEFAULT_GOAL := help
+# Unset builtin C/C++ variables
+MAKEFLAGS += --no-builtin-variables
 # Unset builtin C/C++ rules
 MAKEFLAGS += --no-builtin-rules
 # Don't log recursion
@@ -27,7 +29,7 @@ MAKEFLAGS += --no-print-directory
 # Unset builtin C/C++ suffix patterns
 .SUFFIXES:
 # Enable silent mode with SILENT=TRUE
-ifdef SILENT
+ifeq (${SILENT},TRUE)
 .SILENT:
 endif
 
@@ -38,10 +40,12 @@ endif
 
 # User-overridable:
 
-# Error on missing commands/targets?
-STRICT ?= FALSE
 # What environment to build for
 BUILD_ENV ?= dev
+# Silence all output?
+SILENT? ?= FALSE
+# Error on missing commands/targets?
+STRICT ?= TRUE
 # Which files to assume are functions
 FUNCTIONS ?= $(shell find functions \
   -type f \
@@ -120,12 +124,12 @@ CHECK_EXECUTABLES := git zip fswatch
 CHECK_EXECUTABLES += pip pylint pytest
 CHECK_EXECUTABLES += docker aws sam
 check-executables:
-  @echo Checking for executables: ${CHECK_EXECUTABLES}
-  @$(MAKE) --ignore-errors --keep-going ${CHECK_EXECUTABLES}
+  echo Checking for executables: ${CHECK_EXECUTABLES}
+  $(MAKE) --ignore-errors --keep-going ${CHECK_EXECUTABLES}
 
 .PHONY: ${CHECK_EXECUTABLES}
 ${CHECK_EXECUTABLES}:
-  @type $@ 1>/dev/null && [[ -x $$(type -p $@) ]]
+  type $@ 1>/dev/null && [[ -x $$(type -p $@) ]]
 
 
 # Check command: make check
@@ -157,11 +161,11 @@ SETUP_SUBCOMMANDS += setup-git
 SETUP_GIT := .git .gitignore
 setup-git: ${SETUP_GIT}
 
-.git: | git
-  @git init
+.git:
+  git init
 
 .gitignore:
-  $(file > $@,${SETUP_GIT_IGNORE_FILE})
+  $(file > $@,${SETUP_GITIGNORE_FILE})
 
 
 # Setup subcommand: make setup-structure
@@ -171,65 +175,64 @@ SETUP_SUBCOMMANDS += setup-structure
 
 SETUP_STRUCTURE := bin config functions lib tests
 # SETUP_STRUCTURE += envs
-setup-structure: ${SETUP_STRUCTURE}
-  @echo Setup project structure.
+setup-structure: | ${SETUP_STRUCTURE}
 
 ${SETUP_STRUCTURE}:
-  @mkdir -p $@
+  mkdir -p $@
 
 
-# Setup subcommand: make setup-boilerplate
+# # Setup subcommand: make setup-boilerplate
 .PHONY: setup-boilerplate
 SUBCOMMANDS += setup-boilerplate
 SETUP_SUBCOMMANDS += setup-boilerplate
 
-setup-boilerplate: ${SETUP_BOILERPLATE}
+SETUP_BOILERPLATE := .pylintrc .python-version
+SETUP_BOILERPLATE += README.md requirements.txt
+SETUP_BOILERPLATE += config/template.yml config/resources.yml config/function.yml
+SETUP_BOILERPLATE += functions/__init__.py
+SETUP_BOILERPLATE += tests/test_helper.py
+setup-boilerplate: | ${SETUP_BOILERPLATE}
+
+# Hidden clean subcommand: make clean-boilerplate
+.PHONY: clean-boilerplate
+clean-boilerplate:
+  rm -f $(filter-out README.md,${SETUP_BOILERPLATE})
 
 # SETUP_BOILERPLATE += .env
 # .env:
 #   @touch $@
 
-SETUP_BOILERPLATE += .pylintrc
 .pylintrc:
   $(file > $@,${SETUP_PYLINTRC_FILE})
 
-SETUP_BOILERPLATE += .python-version
 .python-version:
-  @echo 3.6.7 > $@
+  echo 3.6.7 > $@
 
-SETUP_BOILERPLATE += config/template.yml
 config/template.yml: | config
   $(file > $@,${SETUP_CONFIG_TEMPLATE_YML_FILE})
 
-SETUP_BOILERPLATE += config/resources.yml
 config/resources.yml: | config
   $(file > $@,${SETUP_CONFIG_RESOURCES_YML_FILE})
 
-SETUP_BOILERPLATE += config/function.yml
 config/function.yml: | config
   $(file > $@,${SETUP_CONFIG_FUNCTION_YML_FILE})
 
-SETUP_BOILERPLATE += README.md
 README.md:
-  @echo Knock Lambda App > $@
-  @echo ================ >> $@
+  echo 'Knock Lambda App' > $@
+  echo '================' >> $@
 
-SETUP_BOILERPLATE += requirements.txt
 requirements.txt:
   $(file > $@,${SETUP_REQUIREMENTS_TXT_FILE})
 
-# SETUP_BOILERPLATE += envs/dev.env
 # envs/dev.env: | envs
 #   @touch $@
 
-SETUP_BOILERPLATE += functions/__init__.py
 functions/__init__.py: | functions
-  @echo import sys > $@
-  @echo sys.path.append("lib") >> $@
+  echo 'import sys' > $@
+  echo 'sys.path.append("lib")' >> $@
 
-SETUP_BOILERPLATE += tests/test_helper.py
 tests/test_helper.py: | tests
-  @echo import pytest > $@
+  echo 'import pytest' > $@
 
 
 # Setup subcommand: make setup-binstubs
@@ -238,11 +241,11 @@ SUBCOMMANDS += setup-binstubs
 SETUP_SUBCOMMANDS += setup-binstubs
 
 SETUP_BINSTUBS = $(addprefix bin/,${SCRIPTS})
-setup-binstubs: ${SETUP_BINSTUBS}
-  @chmod +x $?
+setup-binstubs: | ${SETUP_BINSTUBS}
 
 ${SETUP_BINSTUBS}: bin/%: | bin
   $(file >> $@,${SETUP_BINSTUBS_$(call upcase,$*)_FILE})
+  chmod +x $@
 
 
 # Setup command: make setup
@@ -277,9 +280,9 @@ BUILD_DIR = $(call dir-merge,build,${BUILD_ENV})
 BUILD_FUNCTION_DIRS = $(call dir-merge,${BUILD_DIR},${FUNCTION_DIRS})
 
 ${BUILD_DIR}:
-  @mkdir -p $@
+  mkdir -p $@
 ${BUILD_FUNCTION_DIRS}: | ${BUILD_DIR}
-  @mkdir -p $@
+  mkdir -p $@
 
 # BUILD subcommand: make build-functions
 .PHONY: build-functions
@@ -290,7 +293,7 @@ BUILD_FUNCTIONS = $(addsuffix /function.py,${BUILD_FUNCTION_DIRS})
 build-functions: ${BUILD_FUNCTIONS}
 
 ${BUILD_FUNCTIONS}: ${BUILD_DIR}/%/function.py: functions/%.py | ${BUILD_DIR}/% functions
-  @cp -f $< $@
+  cp -fu $< $@
 
 
 # BUILD subcommand: make build-libraries
@@ -306,8 +309,8 @@ build-libraries: ${BUILD_LIBRARIES}
 
 define RULE_BUILD_FUNCTION_LIBRARIES
 $1/%: lib/% | $1 lib
-  @mkdir -p $$(dir $$@)
-  @cp -f $$< $$@
+  mkdir -p $$(dir $$@)
+  cp -f $$< $$@
 endef
 $(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
   $(eval $(call RULE_BUILD_FUNCTION_LIBRARIES,${build_function_dir})) \
@@ -328,27 +331,31 @@ BUILD_FUNCTION_DEPENDENCIES = $(call file-filter, \
 build-dependencies: ${BUILD_DEPENDENCIES} ${BUILD_FUNCTION_DEPENDENCIES}
 
 .SECONDARY: ${BUILD_DEPENDENCIES}
-${BUILD_DEPENDENCIES}:: requirements.txt | pip docker ${BUILD_DIR} ${BUILD_FUNCTION_DIRS}
-  @mkdir -p $@
-  @docker run --rm \
+${BUILD_DEPENDENCIES}:: requirements.txt | ${BUILD_DIR}
+  mkdir -p $@
+  docker run --rm -i \
     --user ${uid}:${gid} \
     --workdir /code \
     --volume $(abspath $(pwd)):/code \
     --entrypoint "pip" \
     lambci/lambda:python3.6 \
-    install --no-cache-dir -r requirements.txt -t $@ --upgrade 2>&1
+    install -r requirements.txt -t $@ --upgrade \
+      --quiet \
+      --isolated \
+      --no-cache-dir \
+      --disable-pip-version-check \
 
 define RULE_CREATE_FUNCTION_DEPENDENCIES
-${BUILD_DEPENDENCIES}::
-  @cp -rf ${BUILD_DEPENDENCIES}/* $1
+${BUILD_DEPENDENCIES}:: requirements.txt | $1
+  cp -afu ${BUILD_DEPENDENCIES}/* $1
 endef
 $(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
   $(eval $(call RULE_CREATE_FUNCTION_DEPENDENCIES,${build_function_dir})) \
 ) \
 
 define RULE_UPDATE_FUNCTION_DEPENDENCIES
-$1/%: ${BUILD_DIR}/dependencies/% | $1 ${BUILD_DIR}/dependencies
-  @cp -rf $$< $$@
+$1/%: ${BUILD_DEPENDENCIES}/% | $1
+  cp -afu $$< $$@
 endef
 $(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
   $(eval $(call RULE_UPDATE_FUNCTION_DEPENDENCIES,${build_function_dir})) \
@@ -368,9 +375,9 @@ build-config: ${BUILD_CONFIG}
 
 ${BUILD_CONFIG}: config/template.yml config/resources.yml
 ${BUILD_CONFIG}: ${BUILD_FUNCTION_CONFIGS}
-${BUILD_CONFIG}: %/template.yml: | % sam
+${BUILD_CONFIG}: %/template.yml: | %
   @echo '$(hash) config/template.yml' > $@
-  @cat config/template.yml \
+  cat config/template.yml \
     | sed 's|\$${ENV}|${BUILD_ENV}|g' \
     | sed 's|\$${ENV_NAME}|$(call camelize-path,${BUILD_ENV})|g' \
     >> $@
@@ -383,7 +390,7 @@ ${BUILD_CONFIG}: %/template.yml: | % sam
   @echo '' >> $@
   @echo '$(hash) config/resources.yml' \
     | sed 's|\(.*\)|  \1|' >> $@
-  @cat config/resources.yml \
+  cat config/resources.yml \
     | sed 's|\$${ENV}|${BUILD_ENV}|g' \
     | sed 's|\$${ENV_NAME}|$(call camelize-path,${BUILD_ENV})|g' \
     | sed 's|\(.*\)|  \1|' \
@@ -393,7 +400,7 @@ ${BUILD_CONFIG}: %/template.yml: | % sam
     | sed 's|\(.*\)|  \1|' \
     >> $@
   @echo '' >> $@
-  @$(foreach function_dir,${FUNCTION_DIRS}, \
+  $(foreach function_dir,${FUNCTION_DIRS}, \
     echo '$(hash) functions/${function_dir}.yml' \
       | sed 's|\(.*\)|  \1|' >> $@; \
     cat ${BUILD_DIR}/${function_dir}/function.yml \
@@ -405,21 +412,19 @@ ${BUILD_CONFIG}: %/template.yml: | % sam
       >> $@; \
     echo '' >> $@; \
   )
-  @sam validate --template $@ 2>&1
+ifeq (${VALIDATE},TRUE)
+  sam validate --template $@ 2>&1
+endif
 
 define RULE_BUILD_FUNCTION_CONFIG
-# Don't worry about actually building function configuration overrides
-functions/$1.yml:
-  @:
-# Instead, use overrides if it exists, else use the base config
-${BUILD_DIR}/$1/function.yml: ${BUILD_DIR}/%/function.yml: functions/%.yml
-${BUILD_DIR}/$1/function.yml: | ${BUILD_DIR}/$1 functions config/function.yml
-  @if [ -e functions/$$*.yml ]; \
-  then \
-    cp -f functions/$$*.yml $$@; \
-  else \
-    cp -f config/function.yml $$@; \
-  fi
+# If function lacks its own config template, use that
+ifeq (,$(wildcard functions/$1.yml))
+${BUILD_DIR}/$1/function.yml: config/function.yml | ${BUILD_DIR}/$1
+  cp -f $$< $$@
+else # Otherwise use its personal one
+${BUILD_DIR}/$1/function.yml: functions/$1.yml | ${BUILD_DIR}/$1
+  cp -f $$< $$@
+endif
 endef
 $(foreach function_dir,${FUNCTION_DIRS}, \
   $(eval $(call RULE_BUILD_FUNCTION_CONFIG,${function_dir})) \
@@ -459,7 +464,7 @@ Destroys the ${BUILD_DIR} directory.
 endef
 
 clean:
-  @rm -rf build
+  rm -rf build
 
 
 ####
@@ -495,7 +500,7 @@ Can be restricted to only certain functions by specifying:
 FUNCTIONS=path/to/function.file
 endef
 
-function: ${FUNCTIONS}
+function: | ${FUNCTIONS}
   @echo ${FUNCTION_NAMES}
 
 ${FUNCTIONS}:
@@ -537,34 +542,31 @@ HELP_INFO_COMMANDS = $(addprefix help-info-,${COMMANDS})
 
 help: STRICT ?= FALSE
 help: | help-commands
-  @echo $$'\nFor more information on a given command, run:'
-  @echo 'make help-command-<command>'
+  echo $$'\nFor more information on a given command, run:'
+  echo 'make help-command-<command>'
 
 # Help subcommand: make help-commands
 help-commands:
-  @echo 'Available commands:'
-  @echo ''
-  @$(MAKE) ${HELP_INFO_COMMANDS}
+  echo 'Available commands:'
+  echo ''
+  $(MAKE) ${HELP_INFO_COMMANDS}
 
 .PHONY: ${HELP_INFO_COMMANDS}
 ${HELP_INFO_COMMANDS}: help-info-%:
-  @echo make $*
-  @echo "  ${INFO_$(call upcase,$*)}"
+  echo make $*
+  echo "  ${INFO_$(call upcase,$*)}"
 
 .PHONY: ${HELP_COMMANDS}
 ${HELP_COMMANDS}: help-command-%:
-  @echo USAGE: make $*
-  @echo ''
-  @echo "$$HELP_$(call upcase,$*)"
+  echo USAGE: make $*
+  echo ''
+  echo "$$HELP_$(call upcase,$*)"
 
 ####
 # Catch-all commands
 ##
 
-ifeq (${STRICT},TRUE)
-%:
-  $(error Unrecognized command or target file: $*)
-else
+ifneq (${STRICT},TRUE)
 %:
   $(warning Unrecognized command or target file: $*)
 endif
@@ -578,7 +580,7 @@ endif
 # SETUP FILES:
 ##
 
-define SETUP_GIT_IGNORE_FILE
+define SETUP_GITIGNORE_FILE
 # Before adding to this file,
 # consider what is project-specific,
 # and what belongs in your
@@ -587,7 +589,6 @@ define SETUP_GIT_IGNORE_FILE
 ####
 # Project stuff
 ##
-bin/
 build/
 envs/prod.env
 
@@ -607,10 +608,10 @@ pip-delete-this-directory.txt
 # Jupyter Notebook
 .ipynb_checkpoints
 
-endef # SETUP_GIT_IGNORE_FILE
+endef # SETUP_GITIGNORE_FILE
 
 
-define SETUP_PYLINT_RC_FILE
+define SETUP_PYLINTRC_FILE
 [MASTER]
 ignore-patterns=build
 
@@ -623,7 +624,7 @@ indent-after-paren=2
 [MESSAGES CONTROL]
 disable=missing-docstring
 
-endef
+endef # SETUP_PYLINTRC_FILE
 
 
 define SETUP_REQUIREMENTS_TXT_FILE
@@ -667,18 +668,41 @@ define SETUP_CONFIG_FUNCTION_YML_FILE
 #  $${ENV_NAME}: tilelized version of $${ENV}
 #  $${NAME}: the lambda function's name
 #  $${PATH}: the path to the function within the functions folder
+
 $${NAME}: &$${NAME}
   Type: AWS::Serverless::Function
   Properties:
     CodeUri: $${PATH}
     Handler: function.handler
     Events:
+
+      GetRaw$${NAME}:
+        Type: Api
+        Properties:
+          Path: /$${PATH}
+          Method: get
       Get$${NAME}:
+        Type: Api
+        Properties:
+          Path: /$${PATH}/
+          Method: get
+      GetExtra$${NAME}:
         Type: Api
         Properties:
           Path: /$${PATH}/{extra+}
           Method: get
+
+      PostRaw$${NAME}:
+        Type: Api
+        Properties:
+          Path: /$${PATH}
+          Method: post
       Post$${NAME}:
+        Type: Api
+        Properties:
+          Path: /$${PATH}/
+          Method: post
+      PostExtra$${NAME}:
         Type: Api
         Properties:
           Path: /$${PATH}/{extra+}
@@ -704,7 +728,13 @@ if [[ "$$1" == help ]]; then
   exit 0
 fi
 
-(set -x; sam local start-api --template $$(make template) "$${@:1}")
+if [[ "$$VERBOSE" == TRUE ]]; then
+  verbosity_flags="--debug"
+fi
+
+template=$$(make template)
+
+(set -x; sam local start-api --template $$template $$verbosity_flags "$${@:1}")
 
 endef # SETUP_BINSTUBS_SERVER_FILE
 
@@ -714,7 +744,7 @@ define SETUP_BINSTUBS_RUN_FILE
 export BUILD_ENV=$${BUILD_ENV:-dev}
 
 HELP=$$(cat <<-HELP
-Runs 'sam local invoke' te execute the specified function file
+Runs 'sam local invoke' to execute the specified function file
 against the current BUILD_ENV ($$BUILD_ENV).
 
 All other provided command-line options are passed on to it.
@@ -747,6 +777,7 @@ endef # SETUP_BINSTUBS_DEPLOY_FILE
 define SETUP_BINSTUBS_WATCH_FILE
 #!/usr/bin/env bash
 export BUILD_ENV=$${BUILD_ENV:-dev}
+export VALIDATE=$${VALIDATE:-FALSE}
 
 CMD=$${CMD:-make build}
 WATCH="functions lib requirements.txt config.yml"
@@ -757,6 +788,11 @@ against the current BUILD_ENV ($$BUILD_ENV) when files change.
 
 It will watch the provided files and folders if any are supplied,
 otherwise it will use a default list ($$WATCH).
+
+If VALIDATE=TRUE is given it will validate the template
+every time it regenerates it, otherwise it will not.
+
+If SILENT=TRUE is given it will supress Makefile output.
 HELP
 )
 
