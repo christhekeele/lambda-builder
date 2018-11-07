@@ -204,6 +204,10 @@ SETUP_BOILERPLATE += config.yml
 config.yml:
   $(file > $@,${SETUP_CONFIG_YML_FILE})
 
+SETUP_BOILERPLATE += resources.yml
+resources.yml:
+  $(file > $@,${SETUP_RESOURCES_YML_FILE})
+
 SETUP_BOILERPLATE += README.md
 README.md:
   @echo Knock Lambda App > $@
@@ -361,8 +365,11 @@ BUILD_CONFIG = ${BUILD_DIR}/template.yml
 export TEMPLATE_FILE = ${BUILD_DIR}/template.yml
 build-config: ${BUILD_CONFIG}
 
-${BUILD_CONFIG}:: %/template.yml: config.yml ${BUILD_FUNCTION_CONFIGS} | % sam
-  @cat config.yml > $@
+${BUILD_CONFIG}: config.yml resources.yml
+${BUILD_CONFIG}: ${BUILD_FUNCTION_CONFIGS}
+${BUILD_CONFIG}: %/template.yml: | % sam
+  @echo '$(hash) config.yml' > $@
+  @cat config.yml >> $@
   @echo '' >> $@
   @echo 'Resources:' >> $@
   @echo '' >> $@
@@ -373,12 +380,17 @@ ${BUILD_CONFIG}:: %/template.yml: config.yml ${BUILD_FUNCTION_CONFIGS} | % sam
   )
   @sam validate --template $@ 2>&1
 
-define RULE_CREATE_FUNCTION_CONFIG
-$1/function.yml: ${BUILD_DIR}/%/function.yml: | $1
-  $$(file >$$@,$$(call RESOURCE_CONFIG_TEMPLATE,$$(call build-env-fun-name,${BUILD_ENV},$$*),$$*))
+define RULE_BUILD_FUNCTION_CONFIG
+# Don't worry about actually building sideloaded function configuration
+function/$1.yml:
+  @:
+# Instead, use our template and write over that if such a config exists
+${BUILD_DIR}/$1/function.yml: ${BUILD_DIR}/%/function.yml: function/%.yml | ${BUILD_DIR}/$1
+  $$(file > $$@,$$(call RESOURCE_CONFIG_TEMPLATE,$$(call build-env-fun-name,${BUILD_ENV},$1),$1))
+  @if [ -e function/$$*.yml ]; then cp -f function/$$*.yml $$@; fi
 endef
-$(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
-  $(eval $(call RULE_CREATE_FUNCTION_CONFIG,${build_function_dir})) \
+$(foreach function_dir,${FUNCTION_DIRS}, \
+  $(eval $(call RULE_BUILD_FUNCTION_CONFIG,${function_dir})) \
 ) \
 
 
@@ -605,6 +617,12 @@ Globals:
 # Resources: will be appended to the end of this file
 
 endef # SETUP_CONFIG_YML_FILE
+
+
+define SETUP_RESOURCES_YML_FILE
+# Non-Lambda Resources:
+
+endef # SETUP_RESOURCES_YML_FILE
 
 
 define SETUP_BINSTUBS_SERVER_FILE
