@@ -371,30 +371,38 @@ ${BUILD_CONFIG}: ${BUILD_FUNCTION_CONFIGS}
 ${BUILD_CONFIG}: %/template.yml: | % sam
   @echo '$(hash) config/template.yml' > $@
   @cat config/template.yml \
-    | sed 's|\$${ENV}|${BUILD_ENV}|g' >> $@
+    | sed 's|\$${ENV}|${BUILD_ENV}|g' \
+    | sed 's|\$${ENV_NAME}|$(call camelize-path,${BUILD_ENV})|g' \
+    >> $@
   @echo '' >> $@
   @echo 'Resources:' >> $@
   @echo '' >> $@
   @echo '$(hash) Non-Lambda Resources:' \
-    | sed 's|\(.*\)|  \1|' >> $@
+    | sed 's|\(.*\)|  \1|' \
+    >> $@
   @echo '' >> $@
   @echo '$(hash) config/resources.yml' \
     | sed 's|\(.*\)|  \1|' >> $@
   @cat config/resources.yml \
     | sed 's|\$${ENV}|${BUILD_ENV}|g' \
-    | sed 's|\(.*\)|  \1|' >> $@
+    | sed 's|\$${ENV_NAME}|$(call camelize-path,${BUILD_ENV})|g' \
+    | sed 's|\(.*\)|  \1|' \
+    >> $@
   @echo '' >> $@
   @echo '$(hash) Lambda Resources:' \
-    | sed 's|\(.*\)|  \1|' >> $@
+    | sed 's|\(.*\)|  \1|' \
+    >> $@
   @echo '' >> $@
   @$(foreach function_dir,${FUNCTION_DIRS}, \
     echo '$(hash) functions/${function_dir}.yml' \
       | sed 's|\(.*\)|  \1|' >> $@; \
     cat ${BUILD_DIR}/${function_dir}/function.yml \
       | sed 's|\$${ENV}|${BUILD_ENV}|g' \
+      | sed 's|\$${ENV_NAME}|$(call camelize-path,${BUILD_ENV})|g' \
       | sed 's|\$${NAME}|$(call camelize-path,${function_dir})|g' \
       | sed 's|\$${PATH}|${function_dir}|g' \
-      | sed 's|\(.*\)|  \1|' >> $@; \
+      | sed 's|\(.*\)|  \1|' \
+      >> $@; \
     echo '' >> $@; \
   )
   @sam validate --template $@ 2>&1
@@ -627,6 +635,7 @@ endef # SETUP_REQUIREMENTS_TXT_FILE
 define SETUP_CONFIG_TEMPLATE_YML_FILE
 # Variables:
 #  $${ENV}: the value of BUILD_ENV at build time
+#  $${ENV_NAME}: tilelized version of $${ENV}
 
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
@@ -645,6 +654,7 @@ endef # SETUP_CONFIG_TEMPLATE_YML_FILE
 define SETUP_CONFIG_RESOURCES_YML_FILE
 # Variables:
 #  $${ENV}: the value of BUILD_ENV at build time
+#  $${ENV_NAME}: tilelized version of $${ENV}
 
 # Additional resources go here
 
@@ -654,6 +664,7 @@ endef # SETUP_RESOURCES_YML_FILE
 define SETUP_CONFIG_FUNCTION_YML_FILE
 # Variables:
 #  $${ENV}: the value of BUILD_ENV at build time
+#  $${ENV_NAME}: tilelized version of $${ENV}
 #  $${NAME}: the lambda function's name
 #  $${PATH}: the path to the function within the functions folder
 $${NAME}: &$${NAME}
