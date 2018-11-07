@@ -439,7 +439,7 @@ clean:
 COMMANDS += template
 INFO_TEMPLATE = Prints path to built project template
 export define HELP_TEMPLATE
-Prints the path to the AWS CloudConfiguration template file.
+Prints the path to the AWS CloudFormation template file.
 endef
 
 template:
