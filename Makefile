@@ -57,8 +57,8 @@ LIBRARIES ?= $(shell find lib \
 )
 
 # Other variables:
-SCRIPTS := server run watch
-# SCRIPTS += debug test lint deploy
+SCRIPTS := server run watch lint
+# SCRIPTS += test deploy
 
 #####################
 # UTILITY FUNCTIONS:
@@ -120,7 +120,9 @@ build-env-fun-name = $(call dir-merge-camelize-path,$1,$2)
 SUBCOMMANDS += check-executables
 CHECK_SUBCOMMANDS += check-executables
 
-CHECK_EXECUTABLES := git pip zip docker aws sam fswatch
+CHECK_EXECUTABLES := git zip fswatch
+CHECK_EXECUTABLES += pip pylint pytest
+CHECK_EXECUTABLES += docker aws sam
 check-executables:
   @echo Checking for executables: ${CHECK_EXECUTABLES}
   @$(MAKE) --ignore-errors --keep-going ${CHECK_EXECUTABLES}
@@ -458,6 +460,27 @@ ${FUNCTIONS}:
 
 
 ####
+# Command: make update
+##
+
+# Update command: make update
+.PHONY: update
+COMMANDS += update
+INFO_UPDATE = Updates the Makefile
+export define HELP_UPDATE
+Fetches the latest version of this Makefile from GitHub.
+endef
+
+update: REPO ?= knockrentals/lamba-builder
+update:
+  curl -L -o newfile https://raw.githubusercontent.com/${REPO}/master/Makefile
+
+${FUNCTIONS}:
+  @mkdir -p $(dir $@)
+  $(file > $@,$(call FUNCTION_FILE))
+
+
+####
 # Command: make help
 ##
 
@@ -548,13 +571,16 @@ endef # SETUP_GIT_IGNORE_FILE
 
 
 define SETUP_PYLINT_RC_FILE
-init-hook=import sys; sys.path.append('lib')
-
-indent-string='  '
-indent-after-paren:=2
-
+[MASTER]
 ignore-patterns=build
 
+init-hook=import sys; sys.path.append('lib')
+
+[FORMAT]
+indent-string='  '
+indent-after-paren=2
+
+[MESSAGES CONTROL]
 disable=missing-docstring
 
 endef
@@ -585,11 +611,20 @@ define SETUP_BINSTUBS_SERVER_FILE
 #!/usr/bin/env bash
 export BUILD_ENV=$${BUILD_ENV:-dev}
 
-make build
+HELP=$$(cat <<-HELP
+Runs 'sam local start-api' to launch a local API Gateway server
+against the current BUILD_ENV ($$BUILD_ENV).
 
-template=$$(make template)
+All provided command-line options are passed on to it.
+HELP
+)
 
-sam local start-api --template $$template "$${@:1}"
+if [[ "$$1" == help ]]; then
+  echo "$$HELP"
+  exit 0
+fi
+
+(set -x; sam local start-api --template $$(make template) "$${@:1}")
 
 endef # SETUP_BINSTUBS_SERVER_FILE
 
@@ -598,18 +633,26 @@ define SETUP_BINSTUBS_RUN_FILE
 #!/usr/bin/env bash
 export BUILD_ENV=$${BUILD_ENV:-dev}
 
+HELP=$$(cat <<-HELP
+Runs 'sam local invoke' te execute the specified function file
+against the current BUILD_ENV ($$BUILD_ENV).
+
+All other provided command-line options are passed on to it.
+HELP
+)
+
+if [[ "$$1" == help ]]; then
+  echo "$$HELP"
+  exit 0
+fi
+
 if [ -z "$$1" ]; then
   echo "Must specify a function file to run."
   exit 1
 fi
 export FUNCTIONS=$$1
 
-make build
-
-function=$$(make functions)
-template=$$(make template)
-
-sam local invoke --template $$template "$$function" "$${@:2}"
+(set -x; sam local invoke --template $$(make template) $$(make functions) "$${@:2}")
 
 endef # SETUP_BINSTUBS_RUN_FILE
 
@@ -625,19 +668,44 @@ define SETUP_BINSTUBS_WATCH_FILE
 export BUILD_ENV=$${BUILD_ENV:-dev}
 
 CMD=$${CMD:-make build}
+WATCH="function lib requirements.txt config.yml"
+
+HELP=$$(cat <<-HELP
+Runs 'fswatch' against project, executing CMD ($$CMD)
+against the current BUILD_ENV ($$BUILD_ENV) when files change.
+
+It will watch the provided files and folders if any are supplied,
+otherwise it will use a default list ($$WATCH).
+HELP
+)
+
+if [[ "$$1" == help ]]; then
+  echo "$$HELP"
+  exit 0
+fi
+
+if [ $$# -ne 0 ]; then
+  WATCH="$${@:1}"
+fi
+echo Files to watch: $$WATCH
 
 echo $$'Watching the filesystem for changes...'
-fswatch -r function lib requirements.txt config.yml \
+fswatch -r $$WATCH \
   --one-per-batch \
   -e pycache -e .pyc \
   --event 512 --event 516 | while read num
 do
-  echo $$'\nDetected file changes, rebuilding...'
-  echo $$'Executing command: '"$$CMD"'\n'
+  echo ''
+  echo Detected file changes, rebuilding...
+  echo Executing command: "$$CMD"
+  echo ''
   result=$$(TIME="%e" time $$CMD 3>&1- 1>&2- 2>&3-)
-  echo $$'\nRebuild took '$$result$$' seconds.\n'
+  echo ''
+  echo Rebuild took "$$result" seconds.
+  echo ''
 done
-echo $$'\nFilesystem watcher terminated.'
+echo ''
+echo Filesystem watcher terminated.
 
 endef # SETUP_BINSTUBS_WATCH_FILE
 
@@ -651,6 +719,27 @@ endef # SETUP_BINSTUBS_TEST_FILE
 define SETUP_BINSTUBS_LINT_FILE
 #!/usr/bin/env bash
 
+LINT="function lib"
+
+HELP=$$(cat <<-HELP
+Runs 'pylint' against project, analyzing python files.
+
+It will lint the provided files and folders if any are supplied,
+otherwise it will use a default list ($$LINT).
+HELP
+)
+
+if [[ "$$1" == help ]]; then
+  echo "$$HELP"
+  exit 0
+fi
+
+if [ $$# -ne 0 ]; then
+  LINT="$${@:1}"
+fi
+echo Files to lint: $$LINT
+
+(set -x; pylint $$LINT)
 endef # SETUP_BINSTUBS_LINT_FILE
 
 
