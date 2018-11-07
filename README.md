@@ -12,7 +12,7 @@ make check
 # Build out new project
 make setup
 # Create new function
-FUNCTIONS=function/hello/world.py make functions
+FUNCTIONS=function/hello/world.py make function
 # Build project
 make build
 # Run server
@@ -36,16 +36,16 @@ Our typical lambda projects look like this:
 ```
 project
 ├── .gitignore                  <-- Avoid checking in .pyc and build/ files
-├── .env                        <-- Project-wide environment variables go here
 ├── README.md                   <-- About the project
-├── requirements.txt            <-- Top-level Python dependencies
-├── config.yml                  <-- Top-level CloudFormation configuration
+├── requirements.txt            <-- Project-wide Python dependencies
 ├── build/                      <-- Build artifacts get placed here
-├── envs/                       <-- Build-environment-specific .env files go here
-├── function/                   <-- One file per lambda function
-├── machine/                    <-- One file per step function state machine
-├── lib/                        <-- Common code gets extracted here
-└── tests/                      <-- Project tests mirror top-level layout
+├── config/
+│   ├── template.yml            <-- Top-level CloudFormation configuration
+│   ├── resources.yml           <-- Additional CloudFormation resources
+│   └── function.yml            <-- Template for your lambda resource configuration
+├── functions/                  <-- One file per lambda function, each defining a handler function
+├── lib/                        <-- Common code here can be included into functions
+└── tests/                      <-- Project tests should mirror top-level layout
 ```
 
 
@@ -75,18 +75,9 @@ It understands the commands:
 
   Build project code into lambda-friendly flat-file artifacts.
 
-- `make package`
-
-  Zip up lambdas for deploy.
-
 - `make clean`
 
   Remove all build artifacts.
-
-- `make update`
-
-  Update the `Makefile` itself.
-
 
 
 Development Scripts
@@ -107,25 +98,13 @@ For ultimate command-line fluency, add `./bin` to your `$PATH`.
 
   Execute individual lambdas locally.
 
-- `./bin/debug`
-
-  Run lambdas with breakpoints enabled.
-
 - `./bin/watch`
 
   Auto-build artifacts when project code changes.
 
-- `./bin/test`
-
-  Run lambda-function aware tests.
-
 - `./bin/lint`
 
   Run lambda-function aware linter.
-
-- `./bin/deploy`
-
-  Upload project lambdas to personal AWS account for testing.
 
 
 Build Process

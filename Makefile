@@ -43,7 +43,7 @@ STRICT ?= FALSE
 # What environment to build for
 BUILD_ENV ?= dev
 # Which files to assume are functions
-FUNCTIONS ?= $(shell find function \
+FUNCTIONS ?= $(shell find functions \
   -type f \
   -iname "*.py" \
   ! -iname "__init__.py" \
@@ -169,7 +169,8 @@ setup-git: ${SETUP_GIT}
 SUBCOMMANDS += setup-structure
 SETUP_SUBCOMMANDS += setup-structure
 
-SETUP_STRUCTURE := bin config envs function lib tests
+SETUP_STRUCTURE := bin config functions lib tests
+# SETUP_STRUCTURE += envs
 setup-structure: ${SETUP_STRUCTURE}
   @echo Setup project structure.
 
@@ -184,9 +185,9 @@ SETUP_SUBCOMMANDS += setup-boilerplate
 
 setup-boilerplate: ${SETUP_BOILERPLATE}
 
-SETUP_BOILERPLATE += .env
-.env:
-  @touch $@
+# SETUP_BOILERPLATE += .env
+# .env:
+#   @touch $@
 
 SETUP_BOILERPLATE += .pylintrc
 .pylintrc:
@@ -217,12 +218,12 @@ SETUP_BOILERPLATE += requirements.txt
 requirements.txt:
   $(file > $@,${SETUP_REQUIREMENTS_TXT_FILE})
 
-SETUP_BOILERPLATE += envs/dev.env
-envs/dev.env: | envs
-  @touch $@
+# SETUP_BOILERPLATE += envs/dev.env
+# envs/dev.env: | envs
+#   @touch $@
 
-SETUP_BOILERPLATE += function/__init__.py
-function/__init__.py: | function
+SETUP_BOILERPLATE += functions/__init__.py
+functions/__init__.py: | functions
   @echo import sys > $@
   @echo sys.path.append("lib") >> $@
 
@@ -266,7 +267,7 @@ setup: ${SETUP_SUBCOMMANDS}
 ##
 
 FUNCTION_FILES = $(call normalize,$(call split-list,${FUNCTIONS}))
-FUNCTION_PATHS = $(patsubst function/%,%,${FUNCTION_FILES})
+FUNCTION_PATHS = $(patsubst functions/%,%,${FUNCTION_FILES})
 FUNCTION_DIRS = $(basename ${FUNCTION_PATHS})
 FUNCTION_NAMES = $(foreach function_dir,${FUNCTION_DIRS}, \
   $(call camelize-path,${function_dir}) \
@@ -288,7 +289,7 @@ BUILD_SUBCOMMANDS += build-functions
 BUILD_FUNCTIONS = $(addsuffix /function.py,${BUILD_FUNCTION_DIRS})
 build-functions: ${BUILD_FUNCTIONS}
 
-${BUILD_FUNCTIONS}: ${BUILD_DIR}/%/function.py: function/%.py | ${BUILD_DIR}/% function
+${BUILD_FUNCTIONS}: ${BUILD_DIR}/%/function.py: functions/%.py | ${BUILD_DIR}/% functions
   @cp -f $< $@
 
 
@@ -387,7 +388,7 @@ ${BUILD_CONFIG}: %/template.yml: | % sam
     | sed 's|\(.*\)|  \1|' >> $@
   @echo '' >> $@
   @$(foreach function_dir,${FUNCTION_DIRS}, \
-    echo '$(hash) function/${function_dir}.yml' \
+    echo '$(hash) functions/${function_dir}.yml' \
       | sed 's|\(.*\)|  \1|' >> $@; \
     cat ${BUILD_DIR}/${function_dir}/function.yml \
       | sed 's|\$${ENV}|${BUILD_ENV}|g' \
@@ -400,13 +401,14 @@ ${BUILD_CONFIG}: %/template.yml: | % sam
 
 define RULE_BUILD_FUNCTION_CONFIG
 # Don't worry about actually building function configuration overrides
-function/$1.yml:
+functions/$1.yml:
   @:
 # Instead, use overrides if it exists, else use the base config
-${BUILD_DIR}/$1/function.yml: ${BUILD_DIR}/%/function.yml: function/%.yml | ${BUILD_DIR}/$1 config/function.yml
-  @if [ -e function/$$*.yml ]; \
+${BUILD_DIR}/$1/function.yml: ${BUILD_DIR}/%/function.yml: functions/%.yml
+${BUILD_DIR}/$1/function.yml: | ${BUILD_DIR}/$1 functions config/function.yml
+  @if [ -e functions/$$*.yml ]; \
   then \
-    cp -f function/$$*.yml $$@; \
+    cp -f functions/$$*.yml $$@; \
   else \
     cp -f config/function.yml $$@; \
   fi
@@ -473,10 +475,10 @@ template:
 ##
 
 # Funtion command: make function
-.PHONY: functions
-COMMANDS += functions
-INFO_FUNCTIONS = Prints function names
-export define HELP_FUNCTIONS
+.PHONY: function
+COMMANDS += function
+INFO_FUNCTION = Prints function names
+export define HELP_FUNCTION
 Prints the AWS resource name of each lambda function,
 creating a starter function if the file does not yet
 exist.
@@ -485,7 +487,7 @@ Can be restricted to only certain functions by specifying:
 FUNCTIONS=path/to/function.file
 endef
 
-functions: ${FUNCTIONS}
+function: ${FUNCTIONS}
   @echo ${FUNCTION_NAMES}
 
 ${FUNCTIONS}:
@@ -493,25 +495,21 @@ ${FUNCTIONS}:
   $(file > $@,$(call FUNCTION_FILE))
 
 
-####
-# Command: make update
-##
+# ####
+# # Command: make update
+# ##
 
-# Update command: make update
-.PHONY: update
-COMMANDS += update
-INFO_UPDATE = Updates the Makefile
-export define HELP_UPDATE
-Fetches the latest version of this Makefile from GitHub.
-endef
+# # Update command: make update
+# .PHONY: update
+# COMMANDS += update
+# INFO_UPDATE = Updates the Makefile
+# export define HELP_UPDATE
+# Fetches the latest version of this Makefile from GitHub.
+# endef
 
-update: REPO ?= knockrentals/lamba-builder
-update:
-  curl -L -o newfile https://raw.githubusercontent.com/${REPO}/master/Makefile
-
-${FUNCTIONS}:
-  @mkdir -p $(dir $@)
-  $(file > $@,$(call FUNCTION_FILE))
+# update: REPO ?= knockrentals/lamba-builder
+# update:
+#   curl -L -o newfile https://raw.githubusercontent.com/${REPO}/master/Makefile
 
 
 ####
@@ -723,7 +721,7 @@ if [ -z "$$1" ]; then
 fi
 export FUNCTIONS=$$1
 
-(set -x; sam local invoke --template $$(make template) $$(make functions) "$${@:2}")
+(set -x; sam local invoke --template $$(make template) $$(make function) "$${@:2}")
 
 endef # SETUP_BINSTUBS_RUN_FILE
 
@@ -731,27 +729,6 @@ endef # SETUP_BINSTUBS_RUN_FILE
 define SETUP_BINSTUBS_DEPLOY_FILE
 #!/usr/bin/env bash
 export BUILD_ENV=$${BUILD_ENV:-dev}
-
-HELP=$$(cat <<-HELP
-Runs 'sam local invoke' te execute the specified function file
-against the current BUILD_ENV ($$BUILD_ENV).
-
-All other provided command-line options are passed on to it.
-HELP
-)
-
-if [[ "$$1" == help ]]; then
-  echo "$$HELP"
-  exit 0
-fi
-
-if [ -z "$$1" ]; then
-  echo "Must specify a function file to run."
-  exit 1
-fi
-export FUNCTIONS=$$1
-
-(set -x; sam local invoke --template $$(make template) $$(make functions) "$${@:2}")
 
 endef # SETUP_BINSTUBS_DEPLOY_FILE
 
@@ -761,7 +738,7 @@ define SETUP_BINSTUBS_WATCH_FILE
 export BUILD_ENV=$${BUILD_ENV:-dev}
 
 CMD=$${CMD:-make build}
-WATCH="function lib requirements.txt config.yml"
+WATCH="functions lib requirements.txt config.yml"
 
 HELP=$$(cat <<-HELP
 Runs 'fswatch' against project, executing CMD ($$CMD)
@@ -812,7 +789,7 @@ endef # SETUP_BINSTUBS_TEST_FILE
 define SETUP_BINSTUBS_LINT_FILE
 #!/usr/bin/env bash
 
-LINT="function lib"
+LINT="functions lib"
 
 HELP=$$(cat <<-HELP
 Runs 'pylint' against project, analyzing python files.
