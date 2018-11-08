@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -e # Fail script if any command fails
+
+lint="functions lib"
+
+if [ $# -ne 0 ] && [[ "$1" == help ]]; then
+cat <<HELP
+Runs 'pylint' against project, analyzing python files.
+
+It will lint the provided files and folders if any are supplied,
+otherwise it will use a default list ($lint).
+HELP
+exit 0
+fi
+
+if [ $# -ne 0 ]; then
+  lint="${@:1}"
+fi
+echo Files to lint: $lint
+
+(
+  [[ "$ECHO" == FALSE ]] || set -x # Echo main command
+
+  pylint $lint
+)

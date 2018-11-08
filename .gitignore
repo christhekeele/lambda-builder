@@ -1,0 +1,26 @@
+# Before adding to this file,
+# consider what is project-specific,
+# and what belongs in your
+# `git config --global core.excludesfile`
+
+####
+# Project stuff
+##
+build/
+envs/prod.env
+
+####
+# Python stuff
+##
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+# C extensions
+*.so
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+# Jupyter Notebook
+.ipynb_checkpoints

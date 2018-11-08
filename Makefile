@@ -46,32 +46,19 @@ BUILD_ENV ?= dev
 SILENT? ?= FALSE
 # Error on missing commands/targets?
 STRICT ?= TRUE
+# Where to curl templates from
+SOURCE ?= https://raw.githubusercontent.com/knockrentals/lambda-builder/master
 # Which files to assume are functions
-FUNCTIONS ?= $(shell find functions \
-  -type f \
-  -iname "*.py" \
-  ! -iname "__init__.py" \
-  ! -path "__pycache__" \
-)
+FUNCTIONS ?= $(shell bin/find/functions)
 # Which files to assume are library files
-LIBRARIES ?= $(shell find lib \
-  -type f \
-  -iname "*.py" \
-  ! -path "__pycache__" \
-)
+LIBRARIES ?= $(shell bin/find/libraries)
 
-# Other variables:
-SCRIPTS := server run watch lint deploy
-# SCRIPTS += test
 
 #####################
 # UTILITY FUNCTIONS:
 ####################
 
 pwd = $(abspath $(shell pwd))
-user = $(shell whoami)
-uid = $(shell id -u)
-gid = $(shell id -g)
 
 swap-std-out-err = 3>&1- 1>&2- 2>&3-
 
@@ -82,11 +69,13 @@ space+=
 comma := ,
 # Literal hash mark character
 hash=\#
+# Literal newline
+define newline
 
-# Functional alias
-head = $(firstword $1)
-# Functional helper
-tail = $(wordlist 2,$(words $1),$1)
+endef
+
+# The time, now
+now = $(shell date --utc --rfc-3339=seconds)
 
 # Converts comma-delimited env vars into space-delimited lists
 split-list = $(strip $(subst $(comma),$(space),$1))
@@ -94,8 +83,6 @@ split-list = $(strip $(subst $(comma),$(space),$1))
 normalize = $(patsubst $(call pwd)/%,%,$(abspath $(join $(addsuffix /,$2),$1)))
 # Joins two directories lists via cross-product
 dir-merge = $(foreach dir,$(call normalize,$1),$(patsubst %,${dir}/%,$(call normalize,$2)))
-# Removes undesirable files and folders from a list
-file-filter = $1#$(filter-out ${IGNORABLES},$1)
 
 # Downcases all letters of each word
 downcase = $(shell echo "$1" | tr '[:upper:]' '[:lower:]')
@@ -150,119 +137,50 @@ check: ${CHECK_SUBCOMMANDS}
 
 
 ####
-# Command: make setup
+# Command: make project
 ##
 
-# Setup subcommand: make setup-git
-.PHONY: setup-git
-SUBCOMMANDS += setup-git
-SETUP_SUBCOMMANDS += setup-git
-
-SETUP_GIT := .git .gitignore
-setup-git: ${SETUP_GIT}
-
-.git:
-  git init
-
-.gitignore:
-  $(file > $@,${SETUP_GITIGNORE_FILE})
-
-
-# Setup subcommand: make setup-structure
-.PHONY: setup-structure
-SUBCOMMANDS += setup-structure
-SETUP_SUBCOMMANDS += setup-structure
-
-SETUP_STRUCTURE := bin config functions lib tests
-# SETUP_STRUCTURE += envs
-setup-structure: | ${SETUP_STRUCTURE}
-
-${SETUP_STRUCTURE}:
-  mkdir -p $@
-
-
-# # Setup subcommand: make setup-boilerplate
-.PHONY: setup-boilerplate
-SUBCOMMANDS += setup-boilerplate
-SETUP_SUBCOMMANDS += setup-boilerplate
-
-SETUP_BOILERPLATE := .pylintrc .python-version
-SETUP_BOILERPLATE += README.md requirements.txt
-SETUP_BOILERPLATE += config/template.yml config/resources.yml config/function.yml
-SETUP_BOILERPLATE += functions/__init__.py
-SETUP_BOILERPLATE += tests/test_helper.py
-setup-boilerplate: | ${SETUP_BOILERPLATE}
-
-# Hidden clean subcommand: make clean-boilerplate
-.PHONY: clean-boilerplate
-clean-boilerplate:
-  rm -f $(filter-out README.md,${SETUP_BOILERPLATE})
-
-# SETUP_BOILERPLATE += .env
-# .env:
-#   @touch $@
-
-.pylintrc:
-  $(file > $@,${SETUP_PYLINTRC_FILE})
-
-.python-version:
-  echo 3.6.7 > $@
-
-config/template.yml: | config
-  $(file > $@,${SETUP_CONFIG_TEMPLATE_YML_FILE})
-
-config/resources.yml: | config
-  $(file > $@,${SETUP_CONFIG_RESOURCES_YML_FILE})
-
-config/function.yml: | config
-  $(file > $@,${SETUP_CONFIG_FUNCTION_YML_FILE})
-
-README.md:
-  echo 'Knock Lambda App' > $@
-  echo '================' >> $@
-
-requirements.txt:
-  $(file > $@,${SETUP_REQUIREMENTS_TXT_FILE})
-
-# envs/dev.env: | envs
-#   @touch $@
-
-functions/__init__.py: | functions
-  echo 'import sys' > $@
-  echo 'sys.path.append("lib")' >> $@
-
-tests/test_helper.py: | tests
-  echo 'import pytest' > $@
-
-
-# Setup subcommand: make setup-binstubs
-.PHONY: setup-binstubs
-SUBCOMMANDS += setup-binstubs
-SETUP_SUBCOMMANDS += setup-binstubs
-
-SETUP_BINSTUBS = $(addprefix bin/,${SCRIPTS})
-setup-binstubs: | ${SETUP_BINSTUBS}
-
-${SETUP_BINSTUBS}: bin/%: | bin
-  $(file >> $@,${SETUP_BINSTUBS_$(call upcase,$*)_FILE})
-  chmod +x $@
-
-
-# Setup command: make setup
-.PHONY: setup
-COMMANDS += setup
-INFO_SETUP = Creates expected project files
-export define HELP_SETUP
-${INFO_SETUP}.
+# Project command: make project
+.PHONY: project
+COMMANDS += project
+INFO_PROJECT = Ensures expected project files exist
+export define HELP_PROJECT
+${INFO_PROJECT}.
 
 Existing files are not overwritten, so this command
-can be repeatedly re-run to ensure you have what is
-necessary, without overriding what you've customized.
+can be repeatedly re-run to ensure you have the latest
+missing files, without overriding what you've customized.
 
-SUBCOMMANDS: ${SETUP_SUBCOMMANDS}
 endef
 
-setup: ${SETUP_SUBCOMMANDS}
+
+SCRIPTS += install/deps
+SCRIPTS += find/functions find/libraries
+SCRIPTS += run/lambda run/server
+SCRIPTS += run/watcher run/linter
+# SCRIPTS += deploy test
+
+# Expected project files
+PROJECT_DOTFILES := .gitignore .pylintrc .python-version
+PROJECT_DOCS := README.md
+PROJECT_DEPENDENCIES := requirements.txt
+PROJECT_BINSTUBS := $(addprefix bin/,${SCRIPTS})
+PROJECT_CONFIG := config/template.yml config/resources.yml config/function.yml
+PROJECT_SCAFFOLD += functions/__init__.py
+PROJECT_SCAFFOLD += tests/test_helper.py
+
+PROJECT_FILES += ${PROJECT_DOTFILES}
+PROJECT_FILES += ${PROJECT_DOCS}
+PROJECT_FILES += ${PROJECT_DEPENDENCIES}
+PROJECT_FILES += ${PROJECT_CONFIG}
+PROJECT_FILES += ${PROJECT_SCAFFOLD}
+
+project: ${PROJECT_FILES}
+
+${PROJECT_FILES}:
+  @mkdir -p $(dir $@)
+  curl ${SOURCE}/$@ --output $@ \
+    --location --fail --silent --show-error
 
 
 ####
@@ -323,39 +241,19 @@ SUBCOMMANDS += build-dependencies
 BUILD_SUBCOMMANDS += build-dependencies
 
 BUILD_DEPENDENCIES = $(call dir-merge,${BUILD_DIR},dependencies)
-BUILD_FUNCTION_DEPENDENCIES = $(call file-filter, \
-  $(call dir-merge,${BUILD_FUNCTION_DIRS}, \
-    $(notdir $(wildcard ${BUILD_DEPENDENCIES}/*))\
-  ) \
+BUILD_FUNCTION_DEPENDENCIES = $(call dir-merge,${BUILD_FUNCTION_DIRS}, \
+  $(notdir $(wildcard ${BUILD_DEPENDENCIES}/*))\
 )
-build-dependencies: ${BUILD_DEPENDENCIES} ${BUILD_FUNCTION_DEPENDENCIES}
+build-dependencies:: ${BUILD_DEPENDENCIES} ${BUILD_FUNCTION_DEPENDENCIES}\
 
-.SECONDARY: ${BUILD_DEPENDENCIES}
-${BUILD_DEPENDENCIES}:: requirements.txt | ${BUILD_DIR}
+${BUILD_DEPENDENCIES}: requirements.txt | ${BUILD_DIR} bin/install/deps
   mkdir -p $@
-  docker run --rm -i \
-    --user ${uid}:${gid} \
-    --workdir /code \
-    --volume $(abspath $(pwd)):/code \
-    --entrypoint "pip" \
-    lambci/lambda:python3.6 \
-    install -r requirements.txt -t $@ --upgrade \
-      --quiet \
-      --isolated \
-      --no-cache-dir \
-      --disable-pip-version-check \
-
-define RULE_CREATE_FUNCTION_DEPENDENCIES
-${BUILD_DEPENDENCIES}:: requirements.txt | $1
-  cp -afu ${BUILD_DEPENDENCIES}/* $1
-endef
-$(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
-  $(eval $(call RULE_CREATE_FUNCTION_DEPENDENCIES,${build_function_dir})) \
-) \
+  bin/install/deps -t $@ -r requirements.txt --upgrade
 
 define RULE_UPDATE_FUNCTION_DEPENDENCIES
 $1/%: ${BUILD_DEPENDENCIES}/% | $1
   cp -afu $$< $$@
+  touch $$@
 endef
 $(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
   $(eval $(call RULE_UPDATE_FUNCTION_DEPENDENCIES,${build_function_dir})) \
@@ -376,40 +274,33 @@ build-config: ${BUILD_CONFIG}
 ${BUILD_CONFIG}: config/template.yml config/resources.yml
 ${BUILD_CONFIG}: ${BUILD_FUNCTION_CONFIGS}
 ${BUILD_CONFIG}: %/template.yml: | %
-  @echo '$(hash) config/template.yml' > $@
-  cat config/template.yml \
-    | sed 's|\$${ENV}|${BUILD_ENV}|g' \
-    | sed 's|\$${ENV_NAME}|$(call camelize-path,${BUILD_ENV})|g' \
-    >> $@
+  @echo '$(hash) Generated at $(now)' > $@
   @echo '' >> $@
+
+  cat config/template.yml \
+  | sed 's|\$${ENV}|${BUILD_ENV}|g' \
+  | sed 's|\$${ENV_NAME}|$(call camelize-path,${BUILD_ENV})|g' \
+  >> $@
+  @echo '' >> $@
+
   @echo 'Resources:' >> $@
   @echo '' >> $@
-  @echo '$(hash) Non-Lambda Resources:' \
-    | sed 's|\(.*\)|  \1|' \
-    >> $@
-  @echo '' >> $@
-  @echo '$(hash) config/resources.yml' \
-    | sed 's|\(.*\)|  \1|' >> $@
+
   cat config/resources.yml \
+  | sed 's|\$${ENV}|${BUILD_ENV}|g' \
+  | sed 's|\$${ENV_NAME}|$(call camelize-path,${BUILD_ENV})|g' \
+  | sed 's/\(.*\)/  \1/' \
+  >> $@
+  @echo '' >> $@
+
+  $(foreach function_dir,${FUNCTION_DIRS}, \
+    cat ${BUILD_DIR}/${function_dir}/function.yml \
     | sed 's|\$${ENV}|${BUILD_ENV}|g' \
     | sed 's|\$${ENV_NAME}|$(call camelize-path,${BUILD_ENV})|g' \
-    | sed 's|\(.*\)|  \1|' \
-    >> $@
-  @echo '' >> $@
-  @echo '$(hash) Lambda Resources:' \
-    | sed 's|\(.*\)|  \1|' \
-    >> $@
-  @echo '' >> $@
-  $(foreach function_dir,${FUNCTION_DIRS}, \
-    echo '$(hash) functions/${function_dir}.yml' \
-      | sed 's|\(.*\)|  \1|' >> $@; \
-    cat ${BUILD_DIR}/${function_dir}/function.yml \
-      | sed 's|\$${ENV}|${BUILD_ENV}|g' \
-      | sed 's|\$${ENV_NAME}|$(call camelize-path,${BUILD_ENV})|g' \
-      | sed 's|\$${NAME}|$(call camelize-path,${function_dir})|g' \
-      | sed 's|\$${PATH}|${function_dir}|g' \
-      | sed 's|\(.*\)|  \1|' \
-      >> $@; \
+    | sed 's|\$${NAME}|$(call camelize-path,${function_dir})|g' \
+    | sed 's|\$${PATH}|${function_dir}|g' \
+    | sed 's/\(.*\)/  \1/' \
+    >> $@;  \
     echo '' >> $@; \
   )
 ifeq (${VALIDATE},TRUE)
@@ -466,6 +357,11 @@ endef
 clean:
   rm -rf build
 
+# Hidden clean subcommand: make clean-project
+.PHONY: clean-project
+clean-project:
+  rm -f $(filter-out ${PROJECT_DOCS},${PROJECT_FILES})
+
 
 ####
 # Command: make template
@@ -503,26 +399,38 @@ endef
 function: | ${FUNCTIONS}
   @echo ${FUNCTION_NAMES}
 
+define FUNCTION_TEMPLATE
+import json
+
+# Required handler function
+
+def handler(event=None, context=None):
+  # Threading a 'body' with JSON payload keeps API Gateway happy
+  return {'body': json.dumps({'result': event})}
+
+endef # FUNCTION_TEMPLATE
+
 ${FUNCTIONS}:
   @mkdir -p $(dir $@)
-  $(file > $@,$(call FUNCTION_FILE))
+  $(file > $@,$(call FUNCTION_TEMPLATE))
 
 
-# ####
-# # Command: make update
-# ##
+####
+# Command: make update
+##
 
-# # Update command: make update
-# .PHONY: update
-# COMMANDS += update
-# INFO_UPDATE = Updates the Makefile
-# export define HELP_UPDATE
-# Fetches the latest version of this Makefile from GitHub.
-# endef
+# Update command: make update
+.PHONY: update
+COMMANDS += update
+INFO_UPDATE = Updates the Makefile
+export define HELP_UPDATE
+Fetches the latest version of this Makefile.
+endef
 
-# update: REPO ?= knockrentals/lamba-builder
-# update:
-#   curl -L -o newfile https://raw.githubusercontent.com/${REPO}/master/Makefile
+update: REPO ?= knockrentals/lamba-builder
+update:
+  curl ${SOURCE}/Makefile --output Makefile \
+    --location --fail --silent --show-error
 
 
 ####
@@ -570,303 +478,3 @@ ifneq (${STRICT},TRUE)
 %:
   $(warning Unrecognized command or target file: $*)
 endif
-
-
-#################
-# FILE TEMPLATES:
-################
-
-####
-# SETUP FILES:
-##
-
-define SETUP_GITIGNORE_FILE
-# Before adding to this file,
-# consider what is project-specific,
-# and what belongs in your
-# `git config --global core.excludesfile`
-
-####
-# Project stuff
-##
-build/
-envs/prod.env
-
-####
-# Python stuff
-##
-
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$$py.class
-# C extensions
-*.so
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-# Jupyter Notebook
-.ipynb_checkpoints
-
-endef # SETUP_GITIGNORE_FILE
-
-
-define SETUP_PYLINTRC_FILE
-[MASTER]
-ignore-patterns=build
-
-init-hook=import sys; sys.path.append('lib')
-
-[FORMAT]
-indent-string='  '
-indent-after-paren=2
-
-[MESSAGES CONTROL]
-disable=missing-docstring
-
-endef # SETUP_PYLINTRC_FILE
-
-
-define SETUP_REQUIREMENTS_TXT_FILE
-requests==2.18.4
-
-endef # SETUP_REQUIREMENTS_TXT_FILE
-
-
-define SETUP_CONFIG_TEMPLATE_YML_FILE
-# Variables:
-#  $${ENV}: the value of BUILD_ENV at build time
-#  $${ENV_NAME}: tilelized version of $${ENV}
-
-AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
-Description: >
-  Starter Lambda Project
-
-Globals:
-  Function:
-    Runtime: python3.6
-
-# Resources: will be appended to the end of this file
-
-endef # SETUP_CONFIG_TEMPLATE_YML_FILE
-
-
-define SETUP_CONFIG_RESOURCES_YML_FILE
-# Variables:
-#  $${ENV}: the value of BUILD_ENV at build time
-#  $${ENV_NAME}: tilelized version of $${ENV}
-
-# Additional resources go here
-
-endef # SETUP_RESOURCES_YML_FILE
-
-
-define SETUP_CONFIG_FUNCTION_YML_FILE
-# Variables:
-#  $${ENV}: the value of BUILD_ENV at build time
-#  $${ENV_NAME}: tilelized version of $${ENV}
-#  $${NAME}: the lambda function's name
-#  $${PATH}: the path to the function within the functions folder
-
-$${NAME}: &$${NAME}
-  Type: AWS::Serverless::Function
-  Properties:
-    CodeUri: $${PATH}
-    Handler: function.handler
-    Events:
-
-      GetRaw$${NAME}:
-        Type: Api
-        Properties:
-          Path: /$${PATH}
-          Method: get
-      Get$${NAME}:
-        Type: Api
-        Properties:
-          Path: /$${PATH}/
-          Method: get
-      GetExtra$${NAME}:
-        Type: Api
-        Properties:
-          Path: /$${PATH}/{extra+}
-          Method: get
-
-      PostRaw$${NAME}:
-        Type: Api
-        Properties:
-          Path: /$${PATH}
-          Method: post
-      Post$${NAME}:
-        Type: Api
-        Properties:
-          Path: /$${PATH}/
-          Method: post
-      PostExtra$${NAME}:
-        Type: Api
-        Properties:
-          Path: /$${PATH}/{extra+}
-          Method: post
-
-endef # SETUP_CONFIG_FUNCTION_YML_FILE
-
-
-define SETUP_BINSTUBS_SERVER_FILE
-#!/usr/bin/env bash
-export BUILD_ENV=$${BUILD_ENV:-dev}
-
-HELP=$$(cat <<-HELP
-Runs 'sam local start-api' to launch a local API Gateway server
-against the current BUILD_ENV ($$BUILD_ENV).
-
-All provided command-line options are passed on to it.
-HELP
-)
-
-if [[ "$$1" == help ]]; then
-  echo "$$HELP"
-  exit 0
-fi
-
-if [[ "$$VERBOSE" == TRUE ]]; then
-  verbosity_flags="--debug"
-fi
-
-template=$$(make template)
-
-(set -x; sam local start-api --template $$template $$verbosity_flags "$${@:1}")
-
-endef # SETUP_BINSTUBS_SERVER_FILE
-
-
-define SETUP_BINSTUBS_RUN_FILE
-#!/usr/bin/env bash
-export BUILD_ENV=$${BUILD_ENV:-dev}
-
-HELP=$$(cat <<-HELP
-Runs 'sam local invoke' to execute the specified function file
-against the current BUILD_ENV ($$BUILD_ENV).
-
-All other provided command-line options are passed on to it.
-HELP
-)
-
-if [[ "$$1" == help ]]; then
-  echo "$$HELP"
-  exit 0
-fi
-
-if [ -z "$$1" ]; then
-  echo "Must specify a function file to run."
-  exit 1
-fi
-export FUNCTIONS=$$1
-
-(set -x; sam local invoke --template $$(make template) $$(make function) "$${@:2}")
-
-endef # SETUP_BINSTUBS_RUN_FILE
-
-
-define SETUP_BINSTUBS_DEPLOY_FILE
-#!/usr/bin/env bash
-export BUILD_ENV=$${BUILD_ENV:-dev}
-
-endef # SETUP_BINSTUBS_DEPLOY_FILE
-
-
-define SETUP_BINSTUBS_WATCH_FILE
-#!/usr/bin/env bash
-export BUILD_ENV=$${BUILD_ENV:-dev}
-export VALIDATE=$${VALIDATE:-FALSE}
-
-CMD=$${CMD:-make build}
-WATCH="functions lib requirements.txt config.yml"
-
-HELP=$$(cat <<-HELP
-Runs 'fswatch' against project, executing CMD ($$CMD)
-against the current BUILD_ENV ($$BUILD_ENV) when files change.
-
-It will watch the provided files and folders if any are supplied,
-otherwise it will use a default list ($$WATCH).
-
-If VALIDATE=TRUE is given it will validate the template
-every time it regenerates it, otherwise it will not.
-
-If SILENT=TRUE is given it will supress Makefile output.
-HELP
-)
-
-if [[ "$$1" == help ]]; then
-  echo "$$HELP"
-  exit 0
-fi
-
-if [ $$# -ne 0 ]; then
-  WATCH="$${@:1}"
-fi
-echo Files to watch: $$WATCH
-
-echo $$'Watching the filesystem for changes...'
-fswatch -r $$WATCH \
-  --one-per-batch \
-  -e pycache -e .pyc \
-  --event 512 --event 516 | while read num
-do
-  echo ''
-  echo Detected file changes, rebuilding...
-  echo Executing command: "$$CMD"
-  echo ''
-  result=$$(TIME="%e" time $$CMD 3>&1- 1>&2- 2>&3-)
-  echo ''
-  echo Rebuild took "$$result" seconds.
-  echo ''
-done
-echo ''
-echo Filesystem watcher terminated.
-
-endef # SETUP_BINSTUBS_WATCH_FILE
-
-
-define SETUP_BINSTUBS_TEST_FILE
-#!/usr/bin/env bash
-
-endef # SETUP_BINSTUBS_TEST_FILE
-
-
-define SETUP_BINSTUBS_LINT_FILE
-#!/usr/bin/env bash
-
-LINT="functions lib"
-
-HELP=$$(cat <<-HELP
-Runs 'pylint' against project, analyzing python files.
-
-It will lint the provided files and folders if any are supplied,
-otherwise it will use a default list ($$LINT).
-HELP
-)
-
-if [[ "$$1" == help ]]; then
-  echo "$$HELP"
-  exit 0
-fi
-
-if [ $$# -ne 0 ]; then
-  LINT="$${@:1}"
-fi
-echo Files to lint: $$LINT
-
-(set -x; pylint $$LINT)
-endef # SETUP_BINSTUBS_LINT_FILE
-
-
-define FUNCTION_FILE
-import json
-
-# Required handler function
-
-def handler(event=None, context=None):
-  # Threading a 'body' with JSON payload keeps API Gateway happy
-  return {'body': json.dumps({'result': event})}
-
-endef # FUNCTION_FILE

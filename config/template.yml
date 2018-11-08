@@ -1,0 +1,14 @@
+# Variables:
+#  ${ENV}: the value of BUILD_ENV at build time
+#  ${ENV_NAME}: tilelized version of ${ENV}
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Starter Lambda Project
+
+Globals:
+  Function:
+    Runtime: python3.6
+
+# Resources: will be appended to the end of this file

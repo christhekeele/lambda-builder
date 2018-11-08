@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -e # Fail script if any command fails
+
+export BUILD_ENV=${BUILD_ENV:-dev}
+
+if [ $# -ne 0 ] && [[ "$1" == help ]]; then
+cat <<HELP
+Runs 'sam local invoke' te execute the specified function file
+against the current BUILD_ENV ($BUILD_ENV).
+
+All other provided command-line options are passed on to it.
+HELP
+exit 0
+fi
+
+if [ -z "$1" ]; then
+  echo "Must specify a function file to run."
+  exit 1
+fi
+export FUNCTIONS=$1
+
+function=$(make function)
+template=$(make template)
+user_flags="${@:2}"
+
+(
+  [[ "$ECHO" == FALSE ]] || set -x # Echo main command
+
+  sam local invoke --template $template $function \
+    $user_flags
+)

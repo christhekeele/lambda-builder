@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -e # Fail script if any command fails
+
+export BUILD_ENV=${BUILD_ENV:-dev}
+export VALIDATE=${VALIDATE:-FALSE}
+
+cmd=${CMD:-make ECHO=FALSE build}
+watch="config functions lib requirements.txt"
+
+if [ $# -ne 0 ] && [[ "$1" == help ]]; then
+cat <<HELP
+Runs 'fswatch' against project, executing CMD ($cmd)
+against the current BUILD_ENV ($BUILD_ENV) when files change.
+
+It will watch the provided files and folders if any are supplied,
+otherwise it will use a default list ($watch).
+
+If VALIDATE=TRUE is given it will validate the template
+every time it regenerates it, otherwise it will not.
+HELP
+exit 0
+fi
+
+if [ $# -ne 0 ]; then
+  watch="${@:1}"
+fi
+
+echo Watching the filesystem for changes...
+
+(
+  [[ "$ECHO" == FALSE ]] || set -x # Echo main command
+
+  fswatch -r $watch \
+    --one-per-batch \
+    -e pycache -e .pyc \
+    --event 512 --event 516
+) | while read; do
+  echo
+  echo Detected file changes, rebuilding...
+  echo Executing command: "$cmd"
+  echo
+  result=$(TIME="%e" time $cmd 3>&1- 1>&2- 2>&3-)
+  echo
+  echo Rebuild took "$result" seconds.
+  echo
+done
+
+echo
+echo Filesystem watcher terminated.

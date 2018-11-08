@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -e # Fail script if any command fails
+
+export BUILD_ENV=${BUILD_ENV:-dev}
+
+if [ $# -ne 0 ] && [[ "$1" == help ]]; then
+cat <<HELP
+Installs/updates project dependencies. All provided flags are passed on to pip.
+
+They will be compiled on a docker instance mirroring the SAM runtime.
+HELP
+exit 0
+fi
+
+user=$(id -u):$(id -g)
+pwd=$(pwd)
+
+user_flags="${@:1}"
+
+(
+  [[ "$ECHO" == FALSE ]] || set -x # Echo main command
+
+  docker run --rm -i \
+    --user $user \
+    --workdir /code \
+    --volume $pwd:/code \
+    --entrypoint "pip" \
+    lambci/lambda:python3.6 \
+    install $user_flags \
+      --quiet \
+      --isolated \
+      --no-cache-dir \
+      --disable-pip-version-check \
+
+)

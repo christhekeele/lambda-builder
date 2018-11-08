@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -e # Fail script if any command fails
+
+if [ $# -ne 0 ] && [[ "$1" == help ]]; then
+cat <<HELP
+Determines which files are library files.
+HELP
+exit 0
+fi
+
+find lib \
+  -type f \
+  -iname "*.py" \
+  ! -path "__pycache__" \
+  -printf "%p " \

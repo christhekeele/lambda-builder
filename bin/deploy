@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set +x # Don't echo commands by default
+set -e # Fail script if any command fails
+
+export BUILD_ENV=${BUILD_ENV:-dev}
+
+if [ $# -ne 0 ] && [[ "$1" == help ]]; then
+cat <<HELP
+HELP
+exit 0
+fi
+
+(
+  set -x # Echo main command
+)

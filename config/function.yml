@@ -1,0 +1,44 @@
+# Variables:
+#  ${ENV}: the value of BUILD_ENV at build time
+#  ${ENV_NAME}: tilelized version of ${ENV}
+#  ${NAME}: the lambda function's name
+#  ${PATH}: the path to the function within the functions folder
+
+${NAME}: &${NAME}
+  Type: AWS::Serverless::Function
+  Properties:
+    CodeUri: ${PATH}
+    Handler: function.handler
+    Events:
+
+      GetRaw${NAME}:
+        Type: Api
+        Properties:
+          Path: /${PATH}
+          Method: get
+      Get${NAME}:
+        Type: Api
+        Properties:
+          Path: /${PATH}/
+          Method: get
+      GetExtra${NAME}:
+        Type: Api
+        Properties:
+          Path: /${PATH}/{extra+}
+          Method: get
+
+      PostRaw${NAME}:
+        Type: Api
+        Properties:
+          Path: /${PATH}
+          Method: post
+      Post${NAME}:
+        Type: Api
+        Properties:
+          Path: /${PATH}/
+          Method: post
+      PostExtra${NAME}:
+        Type: Api
+        Properties:
+          Path: /${PATH}/{extra+}
+          Method: post

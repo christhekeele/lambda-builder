@@ -1,0 +1,5 @@
+# Variables:
+#  ${ENV}: the value of BUILD_ENV at build time
+#  ${ENV_NAME}: tilelized version of ${ENV}
+
+# Additional resources go here

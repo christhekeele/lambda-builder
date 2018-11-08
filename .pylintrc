@@ -1,0 +1,11 @@
+[MASTER]
+ignore-patterns=build
+
+init-hook=import sys; sys.path.append('lib')
+
+[FORMAT]
+indent-string='  '
+indent-after-paren=2
+
+[MESSAGES CONTROL]
+disable=missing-docstring

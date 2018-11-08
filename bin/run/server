@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -e # Fail script if any command fails
+
+export BUILD_ENV=${BUILD_ENV:-dev}
+
+if [ $# -ne 0 ] && [[ "$1" == help ]]; then
+cat <<HELP
+Runs 'sam local start-api' to launch a local API Gateway server
+against the current BUILD_ENV ($BUILD_ENV).
+
+All provided command-line options are passed on to it.
+HELP
+exit 0
+fi
+
+if [[ "$VERBOSE" == TRUE ]]; then
+  verbosity_flags="--debug"
+else
+  verbosity_flags=""
+fi
+
+template=$(make template)
+user_flags="${@:1}"
+
+(
+  [[ "$ECHO" == FALSE ]] || set -x # Echo main command
+
+  sam local start-api --template $template \
+    $verbosity_flags \
+    $user_flags
+)
