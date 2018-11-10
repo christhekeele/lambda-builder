@@ -60,8 +60,6 @@ LIBRARIES ?= $(shell bin/find/libraries)
 
 pwd = $(abspath $(shell pwd))
 
-swap-std-out-err = 3>&1- 1>&2- 2>&3-
-
 # Literal space character
 space:=
 space+=
@@ -226,9 +224,9 @@ BUILD_LIBRARIES = $(call dir-merge,${BUILD_FUNCTION_DIRS},${LIBRARY_PATHS})
 build-libraries: ${BUILD_LIBRARIES}
 
 define RULE_BUILD_FUNCTION_LIBRARIES
-$1/%: lib/% | $1 lib
+$1/%.py: lib/%.py | $1 lib
   mkdir -p $$(dir $$@)
-  cp -f $$< $$@
+  cp -fu $$< $$@
 endef
 $(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
   $(eval $(call RULE_BUILD_FUNCTION_LIBRARIES,${build_function_dir})) \
@@ -388,31 +386,14 @@ template:
 COMMANDS += function
 INFO_FUNCTION = Prints function names
 export define HELP_FUNCTION
-Prints the AWS resource name of each lambda function,
-creating a starter function if the file does not yet
-exist.
+Prints the AWS resource name of each lambda function.
 
 Can be restricted to only certain functions by specifying:
 FUNCTIONS=path/to/function.file
 endef
 
-function: | ${FUNCTIONS}
+function:
   @echo ${FUNCTION_NAMES}
-
-define FUNCTION_TEMPLATE
-import json
-
-# Required handler function
-
-def handler(event=None, context=None):
-  # Threading a 'body' with JSON payload keeps API Gateway happy
-  return {'body': json.dumps({'result': event})}
-
-endef # FUNCTION_TEMPLATE
-
-${FUNCTIONS}:
-  @mkdir -p $(dir $@)
-  $(file > $@,$(call FUNCTION_TEMPLATE))
 
 
 ####
