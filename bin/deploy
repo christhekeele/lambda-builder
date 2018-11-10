@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set +x # Don't echo commands by default
 set -e # Fail script if any command fails
 
 export BUILD_ENV=${BUILD_ENV:-dev}
@@ -11,5 +10,7 @@ exit 0
 fi
 
 (
-  set -x # Echo main command
+  [[ "$ECHO" == FALSE ]] || set -x # Echo main command
+
+  aws iam get-user --query "User.UserName"
 )
