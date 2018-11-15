@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -e # Fail script if any command fails
 
-export BUILD_ENV=${BUILD_ENV:-dev}
 export VALIDATE=${VALIDATE:-FALSE}
 
 cmd=${CMD:-make ECHO=FALSE build}
@@ -9,8 +8,7 @@ watch="config functions lib requirements.txt"
 
 if [ $# -ne 0 ] && [[ "$1" == help ]]; then
 cat <<HELP
-Runs 'fswatch' against project, executing CMD ($cmd)
-against the current BUILD_ENV ($BUILD_ENV) when files change.
+Runs 'fswatch' against project, executing CMD ($cmd) when files change.
 
 It will watch the provided files and folders if any are supplied,
 otherwise it will use a default list ($watch).

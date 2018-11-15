@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
 set -e # Fail script if any command fails
 
-export BUILD_ENV=${BUILD_ENV:-dev}
-
 if [ $# -ne 0 ] && [[ "$1" == help ]]; then
 cat <<HELP
-Runs 'sam local start-api' to launch a local API Gateway server
-against the current BUILD_ENV ($BUILD_ENV).
+Runs 'sam local start-api' to launch a local API Gateway server.
 
 All provided command-line options are passed on to it.
 HELP
@@ -19,7 +16,11 @@ else
   verbosity_flags=""
 fi
 
-template=$(make template)
+template=build/functions/template.yml
+if [ ! -f $template ]; then
+  make build $template
+fi
+
 user_flags="${@:1}"
 
 (

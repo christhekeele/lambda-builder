@@ -49,9 +49,22 @@ STRICT ?= TRUE
 # Where to curl templates from
 SOURCE ?= https://raw.githubusercontent.com/knockrentals/lambda-builder/master
 # Which files to assume are functions
-FUNCTIONS ?= $(shell bin/find/functions)
+FUNCTIONS ?= $(shell \
+  find functions \
+    -type f \
+    -iname "*.py" \
+    ! -iname "__init__.py" \
+    ! -path "__pycache__" \
+    -printf "%p " \
+)
 # Which files to assume are library files
-LIBRARIES ?= $(shell bin/find/libraries)
+LIBRARIES ?= $(shell \
+  find lib \
+  -type f \
+  -iname "*.py" \
+  ! -path "__pycache__" \
+  -printf "%p " \
+)
 
 
 #####################
@@ -181,8 +194,9 @@ ${PROJECT_FILES}:
 # Command: make build
 ##
 
+# Install sample function if none exist
 ifeq (,${FUNCTIONS})
-  FUNCTIONS = functions/hello/world.py
+  FUNCTIONS=functions/hello/world.py
 endif
 FUNCTION_FILES = $(call normalize,$(call split-list,${FUNCTIONS}))
 FUNCTION_PATHS = $(patsubst functions/%,%,${FUNCTION_FILES})
@@ -301,7 +315,7 @@ ${BUILD_CONFIG}: %/template.yml: | %
   )
 
 define RULE_BUILD_FUNCTION_CONFIG
-# If function lacks its own config template, use that
+# If function lacks its own config, use template
 ifeq (,$(wildcard functions/$1.yml))
 ${BUILD_DIR}/functions/$1/function.yml: config/function.yml | ${BUILD_DIR}/functions/$1
   cp -f $$< $$@
@@ -349,22 +363,6 @@ endef
 
 clean:
   rm -rf build
-
-
-####
-# Command: make template
-##
-
-# Template command: make template
-.PHONY: template
-COMMANDS += template
-INFO_TEMPLATE = Prints path to built project template
-export define HELP_TEMPLATE
-Prints the path to the AWS CloudFormation template file.
-endef
-
-template:
-  @echo ${BUILD_CONFIG}
 
 
 ####

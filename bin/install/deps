@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 set -e # Fail script if any command fails
 
-export BUILD_ENV=${BUILD_ENV:-dev}
-
 if [ $# -ne 0 ] && [[ "$1" == help ]]; then
 cat <<HELP
-Installs/updates project dependencies. All provided flags are passed on to pip.
+Installs/updates project dependencies on a dockerized lambda runtime.
 
-They will be compiled on a docker instance mirroring the SAM runtime.
+All provided flags are passed on to pip.
 HELP
 exit 0
 fi
