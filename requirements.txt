@@ -1,1 +1,10 @@
+# If you are going to interact with AWS resources,
+# these are the exact python lib versions already available
+# in lambdas if you don't want to bake these dependendencies into
+# your build artifacts. Instead, put them in a development-only
+# requirements file.
+#
+# boto3==1.7.74
+# botocore==1.10.74
+
 requests==2.20.1
