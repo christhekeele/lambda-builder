@@ -510,25 +510,25 @@ HELP_INFO_COMMANDS = $(addprefix help-info-,${COMMANDS})
 
 help: STRICT ?= FALSE
 help: | help-commands
-  echo $$'\nFor more information on a given command, run:'
-  echo 'make help-command-<command>'
+  @echo $$'\nFor more information on a given command, run:'
+  @echo 'make help-command-<command>'
 
 # Help subcommand: make help-commands
 help-commands:
-  echo 'Available commands:'
-  echo ''
-  $(MAKE) ${HELP_INFO_COMMANDS}
+  @echo 'Available commands:'
+  @echo ''
+  @$(MAKE) ${HELP_INFO_COMMANDS}
 
 .PHONY: ${HELP_INFO_COMMANDS}
 ${HELP_INFO_COMMANDS}: help-info-%:
-  echo make $*
-  echo "  ${INFO_$(call upcase,$*)}"
+  @echo make $*
+  @echo "  ${INFO_$(call upcase,$*)}"
 
 .PHONY: ${HELP_COMMANDS}
 ${HELP_COMMANDS}: help-command-%:
-  echo USAGE: make $*
-  echo ''
-  echo "$$HELP_$(call upcase,$*)"
+  @echo USAGE: make $*
+  @echo ''
+  @echo "$$HELP_$(call upcase,$*)"
 
 ####
 # Catch-all commands
