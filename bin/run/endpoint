@@ -3,7 +3,8 @@ set -e # Fail script if any command fails
 
 if [ $# -ne 0 ] && [[ "$1" == help ]]; then
 cat <<HELP
-Runs 'sam local start-lambda' to launch lambdas as if they were the real deal.
+Runs 'sam local start-lambda' to launch your lambdas
+running as if they were the real AWS service.
 
 All provided command-line options are passed on to it.
 HELP

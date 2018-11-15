@@ -1,20 +1,6 @@
 Knock Lambda Builder
 ====================
 
----About
--Installation
---Quick-start
--Conventions
---Structure
---Functions
--Build Tooling
----Build Process
---Make Commands
---Using Make
--Developer Tooling
----Script Philosophy
---Scripts
-
 This repository hosts the build tooling and starter development tooling
 for Knock's serverless apps.
 
