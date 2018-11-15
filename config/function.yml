@@ -1,43 +1,60 @@
 # Variables:
-#  ${ENV}: the value of BUILD_ENV at build time
-#  ${ENV_NAME}: tilelized version of ${ENV}
-#  ${NAME}: the lambda function's name
+#  ${APP}: (pathlike) name of application
+#  ${APP_NAME}: tilelized version of ${APP}
+#  ${FUN_NAME}: the lambda function's name
 #  ${PATH}: the path to the function within the functions folder
+#  ${CODE}: the path to the function code within the build folder
 
-${NAME}: &${NAME}
+${APP_NAME}${FUN_NAME}Function:
   Type: AWS::Serverless::Function
   Properties:
-    CodeUri: ${PATH}
+    CodeUri: ${CODE}
     Handler: function.handler
     Events:
 
-      GetRaw${NAME}:
+      TouchRaw${FUN_NAME}:
+        Type: Api
+        Properties:
+          Path: /${PATH}/
+          Method: options
+      Touch${FUN_NAME}:
+        Type: Api
+        Properties:
+          Path: /${PATH}
+          Method: options
+      TouchExtra${FUN_NAME}:
+        Type: Api
+        Properties:
+          Path: /${PATH}/{extra+}
+          Method: options
+
+      GetRaw${FUN_NAME}:
         Type: Api
         Properties:
           Path: /${PATH}
           Method: get
-      Get${NAME}:
+      Get${FUN_NAME}:
         Type: Api
         Properties:
           Path: /${PATH}/
           Method: get
-      GetExtra${NAME}:
+      GetExtra${FUN_NAME}:
         Type: Api
         Properties:
           Path: /${PATH}/{extra+}
           Method: get
 
-      PostRaw${NAME}:
+      PostRaw${FUN_NAME}:
         Type: Api
         Properties:
           Path: /${PATH}
           Method: post
-      Post${NAME}:
+      Post${FUN_NAME}:
         Type: Api
         Properties:
           Path: /${PATH}/
           Method: post
-      PostExtra${NAME}:
+      PostExtra${FUN_NAME}:
         Type: Api
         Properties:
           Path: /${PATH}/{extra+}

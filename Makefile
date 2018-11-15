@@ -42,6 +42,8 @@ endif
 
 # Path-style application name
 APP ?= app
+# Local artifact output directory
+BUILD_DIR ?= build
 # Silence all output?
 SILENT? ?= FALSE
 # Error on missing commands/targets?
@@ -307,8 +309,9 @@ ${BUILD_CONFIG}: %/template.yml: | %
     cat ${BUILD_DIR}/functions/${function_dir}/function.yml \
     | sed 's|\$${APP}|${APP}|g' \
     | sed 's|\$${APP_NAME}|$(call camelize-path,${APP})|g' \
-    | sed 's|\$${NAME}|$(call camelize-path,${function_dir})|g' \
+    | sed 's|\$${FUN_NAME}|$(call camelize-path,${function_dir})|g' \
     | sed 's|\$${PATH}|${function_dir}|g' \
+    | sed 's|\$${CODE}|${function_dir}|g' \
     | sed 's/\(.*\)/  \1/' \
     >> $@;  \
     echo '' >> $@; \
