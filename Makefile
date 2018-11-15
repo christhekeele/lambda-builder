@@ -40,8 +40,8 @@ endif
 
 # User-overridable:
 
-# What environment to build for
-BUILD_ENV ?= dev
+# Path-style application name
+APP ?= app
 # Silence all output?
 SILENT? ?= FALSE
 # Error on missing commands/targets?
@@ -105,9 +105,8 @@ camelize-path = $(subst $(space),,$(call titleize,$(subst /,$(space),$1)))
 SUBCOMMANDS += check-executables
 CHECK_SUBCOMMANDS += check-executables
 
-CHECK_EXECUTABLES := git zip fswatch
-CHECK_EXECUTABLES += pip pylint pytest
-CHECK_EXECUTABLES += docker aws sam
+CHECK_EXECUTABLES := git pip docker
+CHECK_EXECUTABLES += aws sam
 check-executables:
   echo Checking for executables: ${CHECK_EXECUTABLES}
   $(MAKE) --ignore-errors --keep-going ${CHECK_EXECUTABLES}
@@ -156,22 +155,19 @@ SCRIPTS += install/deps
 SCRIPTS += find/functions find/libraries
 SCRIPTS += run/lambda run/server
 SCRIPTS += run/watcher run/linter
-# SCRIPTS += deploy test
 
 # Expected project files
-PROJECT_DOTFILES := .gitignore .pylintrc .python-version
-PROJECT_DOCS := README.md
-PROJECT_DEPENDENCIES := requirements.txt
-PROJECT_BINSTUBS := $(addprefix bin/,${SCRIPTS})
-PROJECT_CONFIG := config/template.yml config/resources.yml config/function.yml
-PROJECT_SCAFFOLD += functions/__init__.py
-PROJECT_SCAFFOLD += tests/test_helper.py
+PROJECT_TOOLING += .gitignore .pylintrc .python-version
+PROJECT_TOOLING += $(addprefix bin/,${SCRIPTS})
+PROJECT_TOOLING += config/template.yml config/resources.yml config/function.yml
+PROJECT_TOOLING += functions/__init__.py
+# Starter project files
+PROJECT_STARTER += README.md
+PROJECT_STARTER += requirements.txt
+PROJECT_STARTER += functions/hello/world.py lib/foo/bar.py
 
-PROJECT_FILES += ${PROJECT_DOTFILES}
-PROJECT_FILES += ${PROJECT_DOCS}
-PROJECT_FILES += ${PROJECT_DEPENDENCIES}
-PROJECT_FILES += ${PROJECT_CONFIG}
-PROJECT_FILES += ${PROJECT_SCAFFOLD}
+PROJECT_FILES += ${PROJECT_TOOLING}
+PROJECT_FILES += ${PROJECT_STARTER}
 
 project: ${PROJECT_FILES}
 
@@ -185,6 +181,9 @@ ${PROJECT_FILES}:
 # Command: make build
 ##
 
+ifeq (,${FUNCTIONS})
+  FUNCTIONS = functions/hello/world.py
+endif
 FUNCTION_FILES = $(call normalize,$(call split-list,${FUNCTIONS}))
 FUNCTION_PATHS = $(patsubst functions/%,%,${FUNCTION_FILES})
 FUNCTION_DIRS = $(basename ${FUNCTION_PATHS})
@@ -192,8 +191,7 @@ FUNCTION_NAMES = $(foreach function_dir,${FUNCTION_DIRS}, \
   $(call camelize-path,${function_dir}) \
 ) \
 
-BUILD_DIR = $(call dir-merge,build,${BUILD_ENV})
-BUILD_FUNCTION_DIRS = $(call dir-merge,${BUILD_DIR},${FUNCTION_DIRS})
+BUILD_FUNCTION_DIRS = $(call dir-merge,${BUILD_DIR}/functions/,${FUNCTION_DIRS})
 
 ${BUILD_DIR}:
   mkdir -p $@
@@ -208,7 +206,7 @@ BUILD_SUBCOMMANDS += build-functions
 BUILD_FUNCTIONS = $(addsuffix /function.py,${BUILD_FUNCTION_DIRS})
 build-functions: ${BUILD_FUNCTIONS}
 
-${BUILD_FUNCTIONS}: ${BUILD_DIR}/%/function.py: functions/%.py | ${BUILD_DIR}/% functions
+${BUILD_FUNCTIONS}: ${BUILD_DIR}/functions/%/function.py: functions/%.py | ${BUILD_DIR}/functions/% functions
   cp -fu $< $@
 
 
@@ -217,11 +215,14 @@ ${BUILD_FUNCTIONS}: ${BUILD_DIR}/%/function.py: functions/%.py | ${BUILD_DIR}/% 
 SUBCOMMANDS += build-libraries
 BUILD_SUBCOMMANDS += build-libraries
 
+
+ifneq (,${LIBRARIES})
+
 LIBRARY_FILES = $(call normalize,$(call split-list,${LIBRARIES}))
 LIBRARY_PATHS = $(patsubst lib/%,%,${LIBRARY_FILES})
 
-BUILD_LIBRARIES = $(call dir-merge,${BUILD_FUNCTION_DIRS},${LIBRARY_PATHS})
-build-libraries: ${BUILD_LIBRARIES}
+BUILD_FUNCTION_LIBRARIES = $(call dir-merge,${BUILD_FUNCTION_DIRS},${LIBRARY_PATHS})
+build-libraries: ${BUILD_FUNCTION_LIBRARIES}
 
 define RULE_BUILD_FUNCTION_LIBRARIES
 $1/%.py: lib/%.py | $1 lib
@@ -231,6 +232,8 @@ endef
 $(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
   $(eval $(call RULE_BUILD_FUNCTION_LIBRARIES,${build_function_dir})) \
 ) \
+
+endif
 
 
 # BUILD subcommand: make build-dependencies
@@ -265,8 +268,7 @@ BUILD_SUBCOMMANDS += build-config
 
 BUILD_FUNCTION_CONFIGS = $(addsuffix /function.yml,${BUILD_FUNCTION_DIRS})
 
-BUILD_CONFIG = ${BUILD_DIR}/template.yml
-export TEMPLATE_FILE = ${BUILD_DIR}/template.yml
+BUILD_CONFIG = ${BUILD_DIR}/functions/template.yml
 build-config: ${BUILD_CONFIG}
 
 ${BUILD_CONFIG}: config/template.yml config/resources.yml
@@ -276,8 +278,6 @@ ${BUILD_CONFIG}: %/template.yml: | %
   @echo '' >> $@
 
   cat config/template.yml \
-  | sed 's|\$${ENV}|${BUILD_ENV}|g' \
-  | sed 's|\$${ENV_NAME}|$(call camelize-path,${BUILD_ENV})|g' \
   >> $@
   @echo '' >> $@
 
@@ -285,33 +285,28 @@ ${BUILD_CONFIG}: %/template.yml: | %
   @echo '' >> $@
 
   cat config/resources.yml \
-  | sed 's|\$${ENV}|${BUILD_ENV}|g' \
-  | sed 's|\$${ENV_NAME}|$(call camelize-path,${BUILD_ENV})|g' \
   | sed 's/\(.*\)/  \1/' \
   >> $@
   @echo '' >> $@
 
   $(foreach function_dir,${FUNCTION_DIRS}, \
-    cat ${BUILD_DIR}/${function_dir}/function.yml \
-    | sed 's|\$${ENV}|${BUILD_ENV}|g' \
-    | sed 's|\$${ENV_NAME}|$(call camelize-path,${BUILD_ENV})|g' \
+    cat ${BUILD_DIR}/functions/${function_dir}/function.yml \
+    | sed 's|\$${APP}|${APP}|g' \
+    | sed 's|\$${APP_NAME}|$(call camelize-path,${APP})|g' \
     | sed 's|\$${NAME}|$(call camelize-path,${function_dir})|g' \
     | sed 's|\$${PATH}|${function_dir}|g' \
     | sed 's/\(.*\)/  \1/' \
     >> $@;  \
     echo '' >> $@; \
   )
-ifeq (${VALIDATE},TRUE)
-  sam validate --template $@ 2>&1
-endif
 
 define RULE_BUILD_FUNCTION_CONFIG
 # If function lacks its own config template, use that
 ifeq (,$(wildcard functions/$1.yml))
-${BUILD_DIR}/$1/function.yml: config/function.yml | ${BUILD_DIR}/$1
+${BUILD_DIR}/functions/$1/function.yml: config/function.yml | ${BUILD_DIR}/functions/$1
   cp -f $$< $$@
 else # Otherwise use its personal one
-${BUILD_DIR}/$1/function.yml: functions/$1.yml | ${BUILD_DIR}/$1
+${BUILD_DIR}/functions/$1/function.yml: functions/$1.yml | ${BUILD_DIR}/functions/$1
   cp -f $$< $$@
 endif
 endef
@@ -354,11 +349,6 @@ endef
 
 clean:
   rm -rf build
-
-# Hidden clean subcommand: make clean-project
-.PHONY: clean-project
-clean-project:
-  rm -f $(filter-out ${PROJECT_DOCS},${PROJECT_FILES})
 
 
 ####
@@ -408,7 +398,6 @@ export define HELP_UPDATE
 Fetches the latest version of this Makefile.
 endef
 
-update: REPO ?= knockrentals/lamba-builder
 update:
   curl ${SOURCE}/Makefile --output Makefile \
     --location --fail --silent --show-error
