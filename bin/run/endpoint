@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -e # Fail script if any command fails
+
+if [ $# -ne 0 ] && [[ "$1" == help ]]; then
+cat <<HELP
+Runs 'sam local start-lambda' to launch lambdas as if they were the real deal.
+
+All provided command-line options are passed on to it.
+HELP
+exit 0
+fi
+
+if [[ "$VERBOSE" == TRUE ]]; then
+  verbosity_flags="--debug"
+else
+  verbosity_flags=""
+fi
+
+template=build/functions/template.yml
+if [ ! -f $template ]; then
+  make build $template
+fi
+
+user_flags="${@:1}"
+
+(
+  [[ "$ECHO" == FALSE ]] || set -x # Echo main command
+
+  sam local start-lambda --template $template \
+    $verbosity_flags \
+    $user_flags
+)

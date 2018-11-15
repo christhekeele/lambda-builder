@@ -1,13 +1,31 @@
 import json # stdlib import
-# req import
-from foo.bar import baz # lib import
+import requests # req import
+from api.routes import base # lib import
 
+# local function
+def i_choose_you():
+    return "pikachu"
 
-def handler(event, context):
+# Required: lambda handler function
+def handler(event, _context):
 
-    # Demonstrates libraries are available
-    baz()
+    # Demonstrate availability of:
+    
+    # Project 'lib' function: lib/api/routes.py:base()
+    url = base()
 
-    # Echo event into JSON 'body' for API Gateway
-    # Demonstrates stlib is available
-    return {'body': json.dumps({'received': event})}
+    # Lambda-local function: functions/hello/world.py:i_choose_you()
+    pokemon = i_choose_you()
+
+    # Dependency function: requirements.txt:requests.get()
+    response = requests.get(f'{url}/pokemon/{pokemon}').json()
+    
+    # Stdlib function: json.dumps()
+    result = json.dumps({
+        'pokemon': response, # Echo request response
+        'event': event, # Echo received event
+    })
+
+    # Return dict with JSON-encoded 'body'
+    # for API Gateway to return a 200 response
+    return {'body': result}

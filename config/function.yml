@@ -1,11 +1,11 @@
 # Variables:
-#  ${APP}: (pathlike) name of application
-#  ${APP_NAME}: tilelized version of ${APP}
-#  ${FUN_NAME}: the lambda function's name
+#  ${FUN}: (pathlike) location of source code in functions folder
+#  ${FUN_NAME}: lambda function's name (${APP_NAME} + titleized ${FUN})
 #  ${PATH}: the path to the function within the functions folder
 #  ${CODE}: the path to the function code within the build folder
+#  All available in master config/template.yml
 
-${APP_NAME}${FUN_NAME}Function:
+${FUN_NAME}:
   Type: AWS::Serverless::Function
   Properties:
     CodeUri: ${CODE}
@@ -15,12 +15,12 @@ ${APP_NAME}${FUN_NAME}Function:
       TouchRaw${FUN_NAME}:
         Type: Api
         Properties:
-          Path: /${PATH}/
+          Path: /${PATH}
           Method: options
       Touch${FUN_NAME}:
         Type: Api
         Properties:
-          Path: /${PATH}
+          Path: /${PATH}/
           Method: options
       TouchExtra${FUN_NAME}:
         Type: Api

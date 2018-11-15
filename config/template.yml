@@ -1,6 +1,12 @@
 # Variables:
-#  ${ENV}: the value of BUILD_ENV at build time
-#  ${ENV_NAME}: tilelized version of ${ENV}
+#  ${APP}: the path-like name of $APP at build time
+#  ${APP_NAME}: CamelCased version of ${APP}
+#  ${ENV}: the path-like name of $ENV at build time
+#  ${ENV_NAME}: CamelCased version of ${ENV}
+#  ${AUTHOR}: AWS username of person who ran this build
+#  ${BUILD_TIME}: Time of build
+#  ${BUILD_NAME}: Concatenation of above info
+#  ${BUILD_HASH}: Hash of build name
 
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
@@ -10,5 +16,12 @@ Description: >
 Globals:
   Function:
     Runtime: python3.6
+    AutoPublishAlias: Live
+    Tags:
+      Type: Application
+      App: ${APP_NAME}
+      Env: ${ENV_NAME}
+      Author: ${AUTHOR}
+      Build: ${BUILD_HASH}
 
 # Resources: will be appended to the end of this file

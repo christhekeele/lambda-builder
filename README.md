@@ -1,51 +1,98 @@
 Knock Lambda Builder
 ====================
 
-This repository hosts the `Makefile` build tool for Knock's serverless apps.
+---About
+-Installation
+--Quick-start
+-Conventions
+--Structure
+--Functions
+-Build Tooling
+---Build Process
+--Make Commands
+--Using Make
+-Developer Tooling
+---Script Philosophy
+--Scripts
 
-Copy it into new projects and run `make help` to get cooking.
-Or, to quick-start, try:
+This repository hosts the build tooling and starter development tooling
+for Knock's serverless apps.
+
+
+Installation
+------------
+
+To get started, place the `Makefile` in a new project directory like so:
+
+```bash
+curl -O https://raw.githubusercontent.com/knockrentals/lambda-builder/master/Makefile
+```
+
+Then you can run `make help` to get cooking.
+
+### Quick-Start
 
 ```bash
 # Ensure we have the right commands installed
 make check
-# Build out new project
-make setup
-# Create new function
-FUNCTIONS=function/hello/world.py make function
+# Create base project files
+make project
 # Build project
 make build
 # Run server
 ./bin/server
+# Invoke default server settings starter function
+open http://localhost:3000/hello/world
 ```
+
+
+Conventions
+-----------
 
 Our serverless apps are written with the following assumptions:
 
-- We will be using python exclusively
+- We will be using python 3.6
 - We will often be working on multiple related lambdas in tandem
 - We will often be using Step Functions to co-ordinate them
 - We will normally re-use dependendices between related lambdas
 - We will normally be developing locally
 
 
-Project Structure
------------------
+### Project Structure
 
 Our typical lambda projects look like this:
 
 ```
-project
-├── .gitignore                  <-- Avoid checking in .pyc and build/ files
-├── README.md                   <-- About the project
-├── requirements.txt            <-- Project-wide Python dependencies
+app
+│
+├── bin/                        <-- Executable project scripts
+│   ├── install/deps            <---- Customize how dependencies are installed
+│   └── run
+│       ├── endpoint            <---- Runs project locally just like AWS would
+│       ├── lambda              <---- Runs single lambda locally
+│       ├── server              <---- Runs project with easily-accessible API 
+│       └── watcher             <---- Re-builds project when files are changed
+│
 ├── build/                      <-- Build artifacts get placed here
-├── config/
-│   ├── template.yml            <-- Top-level CloudFormation configuration
-│   ├── resources.yml           <-- Additional CloudFormation resources
-│   └── function.yml            <-- Template for your lambda resource configuration
-├── functions/                  <-- One file per lambda function, each defining a handler function
+│   └── functions/
+│       ├── AppHelloWorld.zip   <---- SAM-ready lambda
+│       └── template.yml        <---- SAM-ready CloudFormation configuration
+│
+├── config/                     <-- CloudFormation configuration templates live here
+│   ├── template.yml            <---- Top-level CloudFormation configuration
+│   ├── resources.yml           <---- Additional CloudFormation resources
+│   └── function.yml            <---- Template for your lambda function configuration
+│
+├── functions/                  <-- One file per lambda function, each defining a `handler` function
+│   ├── hello/world.py          <---- Example function file
+│   └── __init__.py             <---- Ensure `import functions` load `lib` directory
+│
 ├── lib/                        <-- Common code here can be included into functions
-└── tests/                      <-- Project tests should mirror top-level layout
+│   └── api/routes.py           <---- Example lib file
+│
+├── requirements.txt            <-- Project-wide Python dependencies
+├── README.md                   <-- About the project
+└── .gitignore                  <-- Avoid checking in .pyc and build/ files
 ```
 
 
@@ -61,13 +108,13 @@ It understands the commands:
 
 - `make help`
 
-  Information about commands. Run this for guidance or further help hints.
+  Information about make commands. Run this for guidance or further help hints.
 
 - `make check`
 
   Check to see if Makefile's runtime dependencies are available.
 
-- `make setup`
+- `make project`
 
   Ensure conventional project scaffolding exists.
 
@@ -88,23 +135,28 @@ into the `./bin` folder. These are expected to evolve alongside
 the needs of the project, unlike the universal build commands.
 
 They can be invoked by running `./bin/<cmd>`.
+For more detail on each command, run `./bin/<cmd> help`.
 For ultimate command-line fluency, add `./bin` to your `$PATH`.
 
-- `./bin/server`
+- `./bin/install/deps`
 
-  Spin up local API Gateway to test lambda functions.
+  Script for locally building project dependencies in a lambda environment.
 
-- `./bin/run`
+- `./bin/run/lambda`
 
-  Execute individual lambdas locally.
+  Execute an individual lambda function locally.
 
-- `./bin/watch`
+- `./bin/run/server`
+
+  Start a local API Gateway to invoke lambda functions.
+
+- `./bin/run/watcher`
 
   Auto-build artifacts when project code changes.
 
-- `./bin/lint`
+- `./bin/run/endpoint`
 
-  Run lambda-function aware linter.
+  Start up local endpoint that mimics production AWS lambda deployments.
 
 
 Build Process
@@ -117,10 +169,10 @@ doing the minimal work neccesary to update build artifacts base on file timestam
 
 When you run `make build`:
 
-  - Every lambda function receives a build folder in `build/BUILD_ENV/` named after itself
+  - Every lambda function receives a build folder in `build/function/` named after itself
   - Each function file is copied to a `function.py` in its build folder
-  - All dependencies are updated and built against a lambda environment to the `build/BUILD_ENV/dependencies` folder
+  - All dependencies are updated and built against a lambda environment to the `build/dependencies` folder
   - All dependencies and `lib/` files are symlinked into every function's personal build folder
-  - A CloudFormation template aware of all these locations is written to `build/BUILD_ENV/template.yml`
+  - A CloudFormation template aware of all these locations is written to `build/template.yml`
 
 Of course, `make` ensures only the files that have changed go through this process, reducing build time.

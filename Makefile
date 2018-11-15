@@ -35,23 +35,40 @@ endif
 
 
 ####
-# Environment variables:
+# Overridable environment variables:
 ##
 
-# User-overridable:
+# Makefile configuration:
 
-# Path-style application name
-APP ?= app
 # Local artifact output directory
 BUILD_DIR ?= build
 # Silence all output?
-SILENT? ?= FALSE
+SILENT ?= FALSE
 # Error on missing commands/targets?
 STRICT ?= TRUE
 # Where to curl templates from
 SOURCE ?= https://raw.githubusercontent.com/knockrentals/lambda-builder/master
+
+# Build information:
+
+# Path-style application name
+APP ?= app
+APP_NAME=$(call camelize-path,${APP})
+# Path-style build environment
+ENV ?= dev
+ENV_NAME=$(call camelize-path,${ENV})
+
+# Who is executing this build script?
+AUTHOR ?= $(shell \
+  echo $$(aws iam get-user --query "User.UserName") \
+  | sed -e 's/^"//' -e 's/"$$//' \
+)
+
+# Files to recognize:
+
 # Which files to assume are functions
 FUNCTIONS ?= $(shell \
+  mkdir -p functions; \
   find functions \
     -type f \
     -iname "*.py" \
@@ -61,11 +78,12 @@ FUNCTIONS ?= $(shell \
 )
 # Which files to assume are library files
 LIBRARIES ?= $(shell \
+  mkdir -p lib; \
   find lib \
-  -type f \
-  -iname "*.py" \
-  ! -path "__pycache__" \
-  -printf "%p " \
+    -type f \
+    -iname "*.py" \
+    ! -path "__pycache__" \
+    -printf "%p " \
 )
 
 
@@ -81,14 +99,14 @@ space+=
 # Literal comma character
 comma := ,
 # Literal hash mark character
-hash=\#
+hash-literal=\#
 # Literal newline
 define newline
 
 endef
 
 # The time, now
-now = $(shell date --utc --rfc-3339=seconds)
+now = $(shell date --utc --rfc-3339=seconds | sed 's/ /T/')
 
 # Converts comma-delimited env vars into space-delimited lists
 split-list = $(strip $(subst $(comma),$(space),$1))
@@ -105,6 +123,20 @@ upcase = $(shell echo "$1" | tr '[:lower:]' '[:upper:]')
 titleize = $(shell STR="$(call downcase,$1)"; LIST=( $$STR ); echo "$${LIST[@]^}")
 # Converts $1: pathlist into a camelcased words
 camelize-path = $(subst $(space),,$(call titleize,$(subst /,$(space),$1)))
+# Converts $1: pathlist into proper lambda function names
+fun-name-from-dir = $(call camelize-path,$(call dir-merge,${APP},$1))
+
+# Hashes input strinng
+hash = $(shell TMP="$$(openssl sha1 <(printf '$1'))"; echo $${TMP/* })
+
+
+###################
+# BUILD META-DATA:
+##################
+
+BUILD_TIME=$(now)
+BUILD_NAME=${AUTHOR}/${BUILD_TIME}/${ENV_NAME}/${APP_NAME}
+BUILD_HASH=$(call hash,${BUILD_NAME})
 
 
 ###########
@@ -120,15 +152,34 @@ camelize-path = $(subst $(space),,$(call titleize,$(subst /,$(space),$1)))
 SUBCOMMANDS += check-executables
 CHECK_SUBCOMMANDS += check-executables
 
-CHECK_EXECUTABLES := git pip docker
-CHECK_EXECUTABLES += aws sam
+# Builtins we can't use `type -p` on with
+CHECK_BUILTINS += echo exit set pwd type 
+
+# Portable bash commands all tooling assumes exists
+CHECK_COMMANDS += cat cp curl find 
+CHECK_COMMANDS += mkdir sed touch
+
+# Installable programs used in this Makefile
+CHECK_INSTALLED += git openssl
+# Installable programs needed by bin/install
+CHECK_INSTALLED += pip docker
+# Installable programs needed by bin/run+bin/deploy
+CHECK_INSTALLED += aws sam
+ 
+CHECK_EXECUTABLES += ${CHECK_BUILTINS}
+CHECK_EXECUTABLES += ${CHECK_COMMANDS}
+CHECK_EXECUTABLES += ${CHECK_INSTALLED}
 check-executables:
   echo Checking for executables: ${CHECK_EXECUTABLES}
   $(MAKE) --ignore-errors --keep-going ${CHECK_EXECUTABLES}
 
-.PHONY: ${CHECK_EXECUTABLES}
-${CHECK_EXECUTABLES}:
-  type $@ 1>/dev/null && [[ -x $$(type -p $@) ]]
+.PHONY: ${CHECK_BUILTINS}
+${CHECK_BUILTINS}:
+  @type $@
+
+.PHONY: ${CHECK_COMMANDS} ${CHECK_INSTALLED}
+${CHECK_COMMANDS} ${CHECK_INSTALLED}:
+  @type $@ && [[ -x $$(type -p $@) ]]
 
 
 # Check command: make check
@@ -167,9 +218,8 @@ endef
 
 
 SCRIPTS += install/deps
-SCRIPTS += find/functions find/libraries
 SCRIPTS += run/lambda run/server
-SCRIPTS += run/watcher run/linter
+SCRIPTS += run/watcher 
 
 # Expected project files
 PROJECT_TOOLING += .gitignore .pylintrc .python-version
@@ -179,7 +229,8 @@ PROJECT_TOOLING += functions/__init__.py
 # Starter project files
 PROJECT_STARTER += README.md
 PROJECT_STARTER += requirements.txt
-PROJECT_STARTER += functions/hello/world.py lib/foo/bar.py
+PROJECT_STARTER += functions/hello/world.py 
+PROJECT_STARTER += lib/api/routes.py
 
 PROJECT_FILES += ${PROJECT_TOOLING}
 PROJECT_FILES += ${PROJECT_STARTER}
@@ -198,7 +249,7 @@ ${PROJECT_FILES}:
 
 # Install sample function if none exist
 ifeq (,${FUNCTIONS})
-  FUNCTIONS=functions/hello/world.py
+FUNCTIONS=functions/hello/world.py
 endif
 FUNCTION_FILES = $(call normalize,$(call split-list,${FUNCTIONS}))
 FUNCTION_PATHS = $(patsubst functions/%,%,${FUNCTION_FILES})
@@ -207,11 +258,14 @@ FUNCTION_NAMES = $(foreach function_dir,${FUNCTION_DIRS}, \
   $(call camelize-path,${function_dir}) \
 ) \
 
-BUILD_FUNCTION_DIRS = $(call dir-merge,${BUILD_DIR}/functions/,${FUNCTION_DIRS})
+BUILD_FUNCTION_DIR = $(call dir-merge,${BUILD_DIR},functions)
+BUILD_FUNCTION_DIRS = $(call dir-merge,${BUILD_FUNCTION_DIR},${FUNCTION_DIRS})
 
-${BUILD_DIR}:
+${BUILD_DIR}/:
   mkdir -p $@
-${BUILD_FUNCTION_DIRS}: | ${BUILD_DIR}
+${BUILD_FUNCTION_DIR}: | ${BUILD_DIR}/
+  mkdir -p $@
+${BUILD_FUNCTION_DIRS}: | ${BUILD_FUNCTION_DIR}
   mkdir -p $@
 
 # BUILD subcommand: make build-functions
@@ -222,7 +276,7 @@ BUILD_SUBCOMMANDS += build-functions
 BUILD_FUNCTIONS = $(addsuffix /function.py,${BUILD_FUNCTION_DIRS})
 build-functions: ${BUILD_FUNCTIONS}
 
-${BUILD_FUNCTIONS}: ${BUILD_DIR}/functions/%/function.py: functions/%.py | ${BUILD_DIR}/functions/% functions
+${BUILD_FUNCTIONS}: ${BUILD_FUNCTION_DIR}/%/function.py: functions/%.py | ${BUILD_FUNCTION_DIR}/% functions
   cp -fu $< $@
 
 
@@ -232,8 +286,11 @@ SUBCOMMANDS += build-libraries
 BUILD_SUBCOMMANDS += build-libraries
 
 
-ifneq (,${LIBRARIES})
 
+# Install sample project libfile if none exist
+ifeq (,${LIBRARIES})
+LIBRARIES=lib/api/routes.py
+endif
 LIBRARY_FILES = $(call normalize,$(call split-list,${LIBRARIES}))
 LIBRARY_PATHS = $(patsubst lib/%,%,${LIBRARY_FILES})
 
@@ -249,8 +306,6 @@ $(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
   $(eval $(call RULE_BUILD_FUNCTION_LIBRARIES,${build_function_dir})) \
 ) \
 
-endif
-
 
 # BUILD subcommand: make build-dependencies
 .PHONY: build-dependencies
@@ -263,7 +318,7 @@ BUILD_FUNCTION_DEPENDENCIES = $(call dir-merge,${BUILD_FUNCTION_DIRS}, \
 )
 build-dependencies:: ${BUILD_DEPENDENCIES} ${BUILD_FUNCTION_DEPENDENCIES}\
 
-${BUILD_DEPENDENCIES}: requirements.txt | ${BUILD_DIR} bin/install/deps
+${BUILD_DEPENDENCIES}: requirements.txt | ${BUILD_DIR}/ bin/install/deps
   mkdir -p $@
   bin/install/deps -t $@ -r requirements.txt --upgrade
 
@@ -272,8 +327,34 @@ $1/%: ${BUILD_DEPENDENCIES}/% | $1
   cp -afu $$< $$@
   touch $$@
 endef
+
 $(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
   $(eval $(call RULE_UPDATE_FUNCTION_DEPENDENCIES,${build_function_dir})) \
+) \
+
+
+# BUILD subcommand: make build-packages
+.PHONY: build-packages
+SUBCOMMANDS += build-packages
+BUILD_SUBCOMMANDS += build-packages
+
+BUILD_PACKAGES = $(addsuffix .zip,$(call dir-merge,${BUILD_FUNCTION_DIR},$(call fun-name-from-dir,${FUNCTION_DIRS})))
+build-packages: ${BUILD_PACKAGES}
+
+define RULE_BUILD_FUNCTION_PACKAGE
+# Zip func dir ($2) into functions folder, named ($1) after function 
+${BUILD_FUNCTION_DIR}/$1.zip: | ${BUILD_FUNCTION_DIR} ${BUILD_FUNCTION_DIR}/$2
+  cd ${BUILD_FUNCTION_DIR}/$2; \
+  zip -roq9 -u $$(abspath $$@) * \
+    -x function.yml \
+    -x **/*.pyc \
+    -x **/__pycache__/ \
+    -x **/__pycache__/**/*
+endef
+
+$(foreach function_dir,${FUNCTION_DIRS}, \
+  $(eval $(call RULE_BUILD_FUNCTION_PACKAGE,$(call fun-name-from-dir,${function_dir}),${function_dir}, \
+  )) \
 ) \
 
 
@@ -284,49 +365,57 @@ BUILD_SUBCOMMANDS += build-config
 
 BUILD_FUNCTION_CONFIGS = $(addsuffix /function.yml,${BUILD_FUNCTION_DIRS})
 
-BUILD_CONFIG = ${BUILD_DIR}/functions/template.yml
+BUILD_CONFIG = ${BUILD_FUNCTION_DIR}/template.yml
 build-config: ${BUILD_CONFIG}
 
+${BUILD_CONFIG}: ${BUILD_PACKAGES}
 ${BUILD_CONFIG}: config/template.yml config/resources.yml
 ${BUILD_CONFIG}: ${BUILD_FUNCTION_CONFIGS}
 ${BUILD_CONFIG}: %/template.yml: | %
-  @echo '$(hash) Generated at $(now)' > $@
+  @echo '$(hash-literal) Generated at ${BUILD_TIME}' > $@
   @echo '' >> $@
 
-  cat config/template.yml \
-  >> $@
+  cat config/template.yml >> $@
   @echo '' >> $@
 
   @echo 'Resources:' >> $@
   @echo '' >> $@
 
-  cat config/resources.yml \
-  | sed 's/\(.*\)/  \1/' \
-  >> $@
+  cat config/resources.yml | sed 's/\(.*\)/  \1/' >> $@
   @echo '' >> $@
 
+# Replace function-specific variables as we append functions
   $(foreach function_dir,${FUNCTION_DIRS}, \
-    cat ${BUILD_DIR}/functions/${function_dir}/function.yml \
-    | sed 's|\$${APP}|${APP}|g' \
-    | sed 's|\$${APP_NAME}|$(call camelize-path,${APP})|g' \
-    | sed 's|\$${FUN_NAME}|$(call camelize-path,${function_dir})|g' \
+    cat ${BUILD_FUNCTION_DIR}/${function_dir}/function.yml \
+    | sed 's|\$${FUN_NAME}|$(call fun-name-from-dir,${function_dir})Function|g' \
     | sed 's|\$${PATH}|${function_dir}|g' \
-    | sed 's|\$${CODE}|${function_dir}|g' \
+    | sed 's|\$${CODE}|$(call fun-name-from-dir,${function_dir}).zip|g' \
     | sed 's/\(.*\)/  \1/' \
     >> $@;  \
     echo '' >> $@; \
   )
 
+# Replace template-wide variables in-place on finished file
+  sed -i 's|\$${APP}|${APP}|g' $@
+  sed -i 's|\$${APP_NAME}|$(call camelize-path,${APP})|g' $@
+  sed -i 's|\$${ENV}|${ENV}|g' $@
+  sed -i 's|\$${ENV_NAME}|$(call camelize-path,${ENV})|g' $@
+  sed -i 's|\$${BUILD_TIME}|${BUILD_TIME}|g' $@
+  sed -i 's|\$${BUILD_NAME}|${BUILD_NAME}|g' $@
+  sed -i 's|\$${BUILD_HASH}|${BUILD_HASH}|g' $@
+  sed -i 's|\$${AUTHOR}|${AUTHOR}|g' $@
+
 define RULE_BUILD_FUNCTION_CONFIG
 # If function lacks its own config, use template
 ifeq (,$(wildcard functions/$1.yml))
-${BUILD_DIR}/functions/$1/function.yml: config/function.yml | ${BUILD_DIR}/functions/$1
+${BUILD_FUNCTION_DIR}/$1/function.yml: config/function.yml | ${BUILD_FUNCTION_DIR}/$1
   cp -f $$< $$@
 else # Otherwise use its personal one
-${BUILD_DIR}/functions/$1/function.yml: functions/$1.yml | ${BUILD_DIR}/functions/$1
+${BUILD_FUNCTION_DIR}/$1/function.yml: functions/$1.yml | ${BUILD_FUNCTION_DIR}/$1
   cp -f $$< $$@
 endif
 endef
+
 $(foreach function_dir,${FUNCTION_DIRS}, \
   $(eval $(call RULE_BUILD_FUNCTION_CONFIG,${function_dir})) \
 ) \
