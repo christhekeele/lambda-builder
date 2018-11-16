@@ -160,9 +160,9 @@ CHECK_COMMANDS += cat cp curl find
 CHECK_COMMANDS += mkdir sed touch
 
 # Installable programs used in this Makefile
-CHECK_INSTALLED += git openssl
+CHECK_INSTALLED += git openssl zip
 # Installable programs needed by bin/install
-CHECK_INSTALLED += pip docker
+CHECK_INSTALLED += docker pip
 # Installable programs needed by bin/run+bin/deploy
 CHECK_INSTALLED += aws sam
  
@@ -170,7 +170,7 @@ CHECK_EXECUTABLES += ${CHECK_BUILTINS}
 CHECK_EXECUTABLES += ${CHECK_COMMANDS}
 CHECK_EXECUTABLES += ${CHECK_INSTALLED}
 check-executables:
-  echo Checking for executables: ${CHECK_EXECUTABLES}
+  @echo Checking for executables: ${CHECK_EXECUTABLES}
   $(MAKE) --ignore-errors --keep-going ${CHECK_EXECUTABLES}
 
 .PHONY: ${CHECK_BUILTINS}
