@@ -14,6 +14,33 @@ To get started, place the `Makefile` in a new project directory like so:
 curl -O https://raw.githubusercontent.com/knockrentals/lambda-builder/master/Makefile
 ```
 
+### macOS
+
+The BSD flavor of tools present on macOS by default are incompatible with some
+of the flags in their GNU counterparts. To resolve this, install the following
+packages from homebrew:
+
+```bash
+brew install make --with-default-names
+brew install findutils --with-default-names
+brew install coreutils
+brew install gnu-sed --with-default-names
+```
+
+Similarly you may need to expose the proper version of `pip` (i.e. 2.x or 3.x):
+
+```bash
+ln -s /usr/local/bin/pip3 /usr/local/bin/pip
+```
+
+You will also need to update your `~/.bash_profile` or `~/.zprofile` to bring
+`coreutils` into your path:
+
+```bash
+PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
+MANPATH="/usr/local/opt/coreutils/libexec/gnuman:$MANPATH"
+```
+
 Then you can run `make help` to get cooking.
 
 ### Quick-Start
