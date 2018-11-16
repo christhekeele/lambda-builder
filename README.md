@@ -53,7 +53,7 @@ make project
 # Build project
 make build
 # Run server
-./bin/server
+./bin/run/server
 # Invoke default server settings starter function
 open http://localhost:3000/hello/world
 ```

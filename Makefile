@@ -236,6 +236,7 @@ PROJECT_FILES += ${PROJECT_TOOLING}
 PROJECT_FILES += ${PROJECT_STARTER}
 
 project: ${PROJECT_FILES}
+  find bin -type f -exec chmod 744 {} +
 
 ${PROJECT_FILES}:
   @mkdir -p $(dir $@)
