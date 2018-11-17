@@ -4,6 +4,7 @@ Knock Lambda Builder
 This repository hosts the build tooling and starter development tooling
 for Knock's serverless apps.
 
+> ***Disclaimer:*** *This is currently an internal Knock tool exclusively as far as we are aware--if you are using it, let us know! Also, if something breaks because of Knock-specific assumptions, issues reports and PRs are more than welcome.*
 
 Installation
 ------------
