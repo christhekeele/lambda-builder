@@ -74,7 +74,8 @@ FUNCTIONS ?= $(shell \
     -iname "*.py" \
     ! -iname "__init__.py" \
     ! -path "__pycache__" \
-    -printf "%p " \
+    -print0 | \
+	xargs -0 -n 1 basename \
 )
 # Which files to assume are library files
 LIBRARIES ?= $(shell \
@@ -83,7 +84,8 @@ LIBRARIES ?= $(shell \
     -type f \
     -iname "*.py" \
     ! -path "__pycache__" \
-    -printf "%p " \
+    -print0 | \
+	xargs -0 -n 1 basename \
 )
 
 
