@@ -106,7 +106,7 @@ define newline
 endef
 
 # The time, now
-now = $(shell date --utc --rfc-3339=seconds | sed 's/ /T/')
+now = $(shell date -u '+%Y-%m-%d %T%z' | sed 's/ /T/')
 
 # Converts comma-delimited env vars into space-delimited lists
 split-list = $(strip $(subst $(comma),$(space),$1))
