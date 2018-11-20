@@ -12,15 +12,10 @@ ${FUN_NAME}:
     Handler: function.handler
     Events:
 
-      TouchRaw${FUN_NAME}:
-        Type: Api
-        Properties:
-          Path: /${PATH}
-          Method: options
       Touch${FUN_NAME}:
         Type: Api
         Properties:
-          Path: /${PATH}/
+          Path: /${PATH}
           Method: options
       TouchExtra${FUN_NAME}:
         Type: Api
@@ -28,15 +23,10 @@ ${FUN_NAME}:
           Path: /${PATH}/{extra+}
           Method: options
 
-      GetRaw${FUN_NAME}:
-        Type: Api
-        Properties:
-          Path: /${PATH}
-          Method: get
       Get${FUN_NAME}:
         Type: Api
         Properties:
-          Path: /${PATH}/
+          Path: /${PATH}
           Method: get
       GetExtra${FUN_NAME}:
         Type: Api
@@ -44,15 +34,10 @@ ${FUN_NAME}:
           Path: /${PATH}/{extra+}
           Method: get
 
-      PostRaw${FUN_NAME}:
-        Type: Api
-        Properties:
-          Path: /${PATH}
-          Method: post
       Post${FUN_NAME}:
         Type: Api
         Properties:
-          Path: /${PATH}/
+          Path: /${PATH}
           Method: post
       PostExtra${FUN_NAME}:
         Type: Api
