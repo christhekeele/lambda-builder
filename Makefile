@@ -278,7 +278,7 @@ BUILD_FUNCTIONS = $(addsuffix /function.py,${BUILD_FUNCTION_DIRS})
 build-functions: ${BUILD_FUNCTIONS}
 
 ${BUILD_FUNCTIONS}: ${BUILD_FUNCTION_DIR}/%/function.py: functions/%.py | ${BUILD_FUNCTION_DIR}/% functions
-  cp -fu $< $@
+  cp -f $< $@
 
 
 # BUILD subcommand: make build-libraries
@@ -301,7 +301,7 @@ build-libraries: ${BUILD_FUNCTION_LIBRARIES}
 define RULE_BUILD_FUNCTION_LIBRARIES
 $1/%.py: lib/%.py | $1 lib
   mkdir -p $$(dir $$@)
-  cp -fu $$< $$@
+  cp -f $$< $$@
 endef
 $(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
   $(eval $(call RULE_BUILD_FUNCTION_LIBRARIES,${build_function_dir})) \
@@ -325,7 +325,7 @@ ${BUILD_DEPENDENCIES}: requirements.txt | ${BUILD_DIR}/ bin/install/deps
 
 define RULE_UPDATE_FUNCTION_DEPENDENCIES
 $1/%: ${BUILD_DEPENDENCIES}/% | $1
-  cp -afu $$< $$@
+  cp -af $$< $$@
   touch $$@
 endef
 
