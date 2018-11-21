@@ -74,7 +74,7 @@ FUNCTIONS ?= $(shell \
     -iname "*.py" \
     ! -iname "__init__.py" \
     ! -path "__pycache__" \
-    -printf "%p " \
+    -print \
 )
 # Which files to assume are library files
 LIBRARIES ?= $(shell \
@@ -83,7 +83,7 @@ LIBRARIES ?= $(shell \
     -type f \
     -iname "*.py" \
     ! -path "__pycache__" \
-    -printf "%p " \
+    -print \
 )
 
 
@@ -106,7 +106,7 @@ define newline
 endef
 
 # The time, now
-now = $(shell date --utc --rfc-3339=seconds | sed 's/ /T/')
+now = $(shell date -u '+%Y-%m-%d %T%z' | sed 's/ /T/')
 
 # Converts comma-delimited env vars into space-delimited lists
 split-list = $(strip $(subst $(comma),$(space),$1))
@@ -278,7 +278,7 @@ BUILD_FUNCTIONS = $(addsuffix /function.py,${BUILD_FUNCTION_DIRS})
 build-functions: ${BUILD_FUNCTIONS}
 
 ${BUILD_FUNCTIONS}: ${BUILD_FUNCTION_DIR}/%/function.py: functions/%.py | ${BUILD_FUNCTION_DIR}/% functions
-  cp -fu $< $@
+  cp -f $< $@
 
 
 # BUILD subcommand: make build-libraries
@@ -301,7 +301,7 @@ build-libraries: ${BUILD_FUNCTION_LIBRARIES}
 define RULE_BUILD_FUNCTION_LIBRARIES
 $1/%.py: lib/%.py | $1 lib
   mkdir -p $$(dir $$@)
-  cp -fu $$< $$@
+  cp -f $$< $$@
 endef
 $(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
   $(eval $(call RULE_BUILD_FUNCTION_LIBRARIES,${build_function_dir})) \
@@ -325,7 +325,7 @@ ${BUILD_DEPENDENCIES}: requirements.txt | ${BUILD_DIR}/ bin/install/deps
 
 define RULE_UPDATE_FUNCTION_DEPENDENCIES
 $1/%: ${BUILD_DEPENDENCIES}/% | $1
-  cp -afu $$< $$@
+  cp -af $$< $$@
   touch $$@
 endef
 

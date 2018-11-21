@@ -23,8 +23,6 @@ packages from homebrew:
 
 ```bash
 brew install make --with-default-names
-brew install findutils --with-default-names
-brew install coreutils
 brew install gnu-sed --with-default-names
 ```
 
