@@ -26,18 +26,10 @@ brew install make --with-default-names
 brew install gnu-sed --with-default-names
 ```
 
-Similarly you may need to expose the proper version of `pip` (i.e. 2.x or 3.x):
+Similarly you may need to expose the proper version of `pip`:
 
 ```bash
 ln -s /usr/local/bin/pip3 /usr/local/bin/pip
-```
-
-You will also need to update your `~/.bash_profile` or `~/.zprofile` to bring
-`coreutils` into your path:
-
-```bash
-PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
-MANPATH="/usr/local/opt/coreutils/libexec/gnuman:$MANPATH"
 ```
 
 Then you can run `make help` to get cooking.
