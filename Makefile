@@ -120,7 +120,7 @@ downcase = $(shell echo "$1" | tr '[:upper:]' '[:lower:]')
 # Upcases all letters of each word
 upcase = $(shell echo "$1" | tr '[:lower:]' '[:upper:]')
 # Upcases first letter of each word
-titleize = $(shell STR="$(call downcase,$1)"; LIST=( $$STR ); echo "$${LIST[@]^}")
+titleize = $(shell echo "$(call downcase,$1)" | sed -e "s/\b./\u\0/g")
 # Converts $1: pathlist into a camelcased words
 camelize-path = $(subst $(space),,$(call titleize,$(subst /,$(space),$1)))
 # Converts $1: pathlist into proper lambda function names
