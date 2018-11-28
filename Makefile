@@ -342,11 +342,23 @@ BUILD_SUBCOMMANDS += build-packages
 BUILD_PACKAGES = $(addsuffix .zip,$(call dir-merge,${BUILD_FUNCTION_DIR},$(call fun-name-from-dir,${FUNCTION_DIRS})))
 build-packages: ${BUILD_PACKAGES}
 
+FUNDIR = functions
+FUNSTRUCTURE := $(shell find $(FUNDIR) -type d)
+FUNFILES := $(addsuffix /*,$(FUNSTRUCTURE))
+FUNFILES := $(wildcard $(FUNFILES))
+FUNFILES := $(filter %.py,$(FUNFILES))
+
+LIBDIR = lib
+LIBSTRUCTURE := $(shell find $(LIBDIR) -type d)
+LIBFILES := $(addsuffix /*,$(LIBSTRUCTURE))
+LIBFILES := $(wildcard $(LIBFILES))
+LIBFILES := $(filter %.py,$(LIBFILES))
+
 define RULE_BUILD_FUNCTION_PACKAGE
 # Zip func dir ($2) into functions folder, named ($1) after function 
-${BUILD_FUNCTION_DIR}/$1.zip: | ${BUILD_FUNCTION_DIR} ${BUILD_FUNCTION_DIR}/$2
+${BUILD_FUNCTION_DIR}/$1.zip: $(FUNFILES) $(LIBFILES) | ${BUILD_FUNCTION_DIR} ${BUILD_FUNCTION_DIR}/$2
   cd ${BUILD_FUNCTION_DIR}/$2; \
-  zip -roq9 -u $$(abspath $$@) * \
+  zip -rq9 $$(abspath $$@) * \
     -x function.yml \
     -x **/*.pyc \
     -x **/__pycache__/ \
