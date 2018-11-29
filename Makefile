@@ -288,10 +288,6 @@ ${BUILD_FUNCTIONS}: ${BUILD_FUNCTION_DIR}/%/function.py: functions/%.py | ${BUIL
 SUBCOMMANDS += build-libraries
 BUILD_SUBCOMMANDS += build-libraries
 
-# Install sample project libfile if none exist
-ifeq (,${LIBRARIES})
-LIBRARIES=lib/api/routes.py
-endif
 LIBRARY_FILES = $(call normalize,$(call split-list,${LIBRARIES}))
 LIBRARY_PATHS = $(patsubst lib/%,%,${LIBRARY_FILES})
 
