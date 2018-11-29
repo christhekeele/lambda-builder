@@ -317,7 +317,7 @@ BUILD_DEPENDENCIES = $(call dir-merge,${BUILD_DIR},dependencies)
 BUILD_FUNCTION_DEPENDENCIES = $(call dir-merge,${BUILD_FUNCTION_DIRS}, \
   $(notdir $(wildcard ${BUILD_DEPENDENCIES}/*))\
 )
-build-dependencies:: ${BUILD_DEPENDENCIES} ${BUILD_FUNCTION_DEPENDENCIES}\
+build-dependencies: ${BUILD_DEPENDENCIES} ${BUILD_FUNCTION_DEPENDENCIES}
 
 ${BUILD_DEPENDENCIES}: requirements.txt | ${BUILD_DIR}/ bin/install/deps
   mkdir -p $@
