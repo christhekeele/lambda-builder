@@ -220,8 +220,8 @@ endef
 
 
 SCRIPTS += install/deps
-SCRIPTS += run/lambda run/server
-SCRIPTS += run/watcher 
+SCRIPTS += run/endpoint run/lambda
+SCRIPTS += run/server run/watcher 
 
 # Expected project files
 PROJECT_TOOLING += .gitignore .pylintrc .python-version
