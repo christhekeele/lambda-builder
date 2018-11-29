@@ -344,7 +344,7 @@ build-packages: ${BUILD_PACKAGES}
 
 define RULE_BUILD_FUNCTION_PACKAGE
 # Zip func dir ($2) into functions folder, named ($1) after function 
-${BUILD_FUNCTION_DIR}/$1.zip: ${BUILD_FUNCTION_DIR}/$2/* | ${BUILD_FUNCTION_DIR} ${BUILD_FUNCTION_DIR}/$2
+${BUILD_FUNCTION_DIR}/$1.zip: $(wildcard ${BUILD_FUNCTION_DIR}/$2/*) | ${BUILD_FUNCTION_DIR} ${BUILD_FUNCTION_DIR}/$2
   cd ${BUILD_FUNCTION_DIR}/$2; \
   zip -rq9 $$(abspath $$@) * \
     -x **/*.pyc \
