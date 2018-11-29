@@ -286,8 +286,6 @@ ${BUILD_FUNCTIONS}: ${BUILD_FUNCTION_DIR}/%/function.py: functions/%.py | ${BUIL
 SUBCOMMANDS += build-libraries
 BUILD_SUBCOMMANDS += build-libraries
 
-
-
 # Install sample project libfile if none exist
 ifeq (,${LIBRARIES})
 LIBRARIES=lib/api/routes.py
@@ -313,19 +311,19 @@ $(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
 SUBCOMMANDS += build-dependencies
 BUILD_SUBCOMMANDS += build-dependencies
 
-BUILD_DEPENDENCIES = $(call dir-merge,${BUILD_DIR},dependencies)
-BUILD_FUNCTION_DEPENDENCIES = $(call dir-merge,${BUILD_FUNCTION_DIRS}, \
-  $(notdir $(wildcard ${BUILD_DEPENDENCIES}/*))\
-)
-build-dependencies:: ${BUILD_DEPENDENCIES} ${BUILD_FUNCTION_DEPENDENCIES}\
+BUILD_DEPENDENCIES = $(call dir-merge,${BUILD_DIR},dependencies/target)
+BUILD_FUNCTION_DEPENDENCIES = $(call dir-merge,${BUILD_FUNCTION_DIRS},dependencies)
+build-dependencies: ${BUILD_FUNCTION_DEPENDENCIES}
 
 ${BUILD_DEPENDENCIES}: requirements.txt | ${BUILD_DIR}/ bin/install/deps
-  mkdir -p $@
-  bin/install/deps -t $@ -r requirements.txt --upgrade
+  mkdir -p $(dir $@)
+  bin/install/deps -t $(dir $@) -r requirements.txt --upgrade
+  touch $@
 
 define RULE_UPDATE_FUNCTION_DEPENDENCIES
-$1/%: ${BUILD_DEPENDENCIES}/% | $1
-  cp -af $$< $$@
+$1/dependencies: ${BUILD_DEPENDENCIES} | $1
+  cp -afr $$(dir $$<)* $$(dir $$@)
+  rm $$(dir $$@)target
   touch $$@
 endef
 
@@ -344,7 +342,7 @@ build-packages: ${BUILD_PACKAGES}
 
 define RULE_BUILD_FUNCTION_PACKAGE
 # Zip func dir ($2) into functions folder, named ($1) after function 
-${BUILD_FUNCTION_DIR}/$1.zip: ${BUILD_FUNCTION_DIR}/$2/* | ${BUILD_FUNCTION_DIR} ${BUILD_FUNCTION_DIR}/$2
+${BUILD_FUNCTION_DIR}/$1.zip: ${BUILD_FUNCTION_DIR}/$2 | ${BUILD_FUNCTION_DIR}
   cd ${BUILD_FUNCTION_DIR}/$2; \
   zip -rq9 $$(abspath $$@) * \
     -x **/*.pyc \
