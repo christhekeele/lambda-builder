@@ -122,7 +122,9 @@ upcase = $(shell echo "$1" | tr '[:lower:]' '[:upper:]')
 # Upcases first letter of each word
 titleize = $(shell echo "$(call downcase,$1)" | sed -e "s/\b./\u\0/g")
 # Converts $1: pathlist into a camelcased words
-camelize-path = $(foreach path,$(call normalize,$1),$(subst $(space),,$(call titleize,$(subst /,$(space),${path}))))
+camelize-path = $(foreach path,$(call normalize,$1),$(subst $(space),,$(call titleize, \
+  $(subst /,$(space),$(subst _,$(space),$(subst -,$(space),${path}))) \
+)))
 # Converts $1: pathlist into proper lambda function names
 fun-name-from-dir = $(call camelize-path,$(call dir-merge,${APP},$1))
 
@@ -286,8 +288,6 @@ ${BUILD_FUNCTIONS}: ${BUILD_FUNCTION_DIR}/%/function.py: functions/%.py | ${BUIL
 SUBCOMMANDS += build-libraries
 BUILD_SUBCOMMANDS += build-libraries
 
-
-
 LIBRARY_FILES = $(call normalize,$(call split-list,${LIBRARIES}))
 LIBRARY_PATHS = $(patsubst lib/%,%,${LIBRARY_FILES})
 
@@ -309,19 +309,19 @@ $(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
 SUBCOMMANDS += build-dependencies
 BUILD_SUBCOMMANDS += build-dependencies
 
-BUILD_DEPENDENCIES = $(call dir-merge,${BUILD_DIR},dependencies)
-BUILD_FUNCTION_DEPENDENCIES = $(call dir-merge,${BUILD_FUNCTION_DIRS}, \
-  $(notdir $(wildcard ${BUILD_DEPENDENCIES}/*))\
-)
-build-dependencies:: ${BUILD_DEPENDENCIES} ${BUILD_FUNCTION_DEPENDENCIES}\
+BUILD_DEPENDENCIES = $(call dir-merge,${BUILD_DIR},dependencies/target)
+BUILD_FUNCTION_DEPENDENCIES = $(call dir-merge,${BUILD_FUNCTION_DIRS},dependencies)
+build-dependencies: ${BUILD_FUNCTION_DEPENDENCIES}
 
 ${BUILD_DEPENDENCIES}: requirements.txt | ${BUILD_DIR}/ bin/install/deps
-  mkdir -p $@
-  bin/install/deps -t $@ -r requirements.txt --upgrade
+  mkdir -p $(dir $@)
+  bin/install/deps -t $(dir $@) -r requirements.txt --upgrade
+  touch $@
 
 define RULE_UPDATE_FUNCTION_DEPENDENCIES
-$1/%: ${BUILD_DEPENDENCIES}/% | $1
-  cp -af $$< $$@
+$1/dependencies: ${BUILD_DEPENDENCIES} | $1
+  cp -af $$(dir $$<)* $$(dir $$@)
+  rm $$(dir $$@)target
   touch $$@
 endef
 
@@ -340,7 +340,7 @@ build-packages: ${BUILD_PACKAGES}
 
 define RULE_BUILD_FUNCTION_PACKAGE
 # Zip func dir ($2) into functions folder, named ($1) after function 
-${BUILD_FUNCTION_DIR}/$1.zip: ${BUILD_FUNCTION_DIR}/$2/* | ${BUILD_FUNCTION_DIR} ${BUILD_FUNCTION_DIR}/$2
+${BUILD_FUNCTION_DIR}/$1.zip: ${BUILD_FUNCTION_DIR}/$2 | ${BUILD_FUNCTION_DIR}
   cd ${BUILD_FUNCTION_DIR}/$2; \
   zip -rq9 $$(abspath $$@) * \
     -x **/*.pyc \
