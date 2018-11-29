@@ -322,7 +322,7 @@ ${BUILD_DEPENDENCIES}: requirements.txt | ${BUILD_DIR}/ bin/install/deps
 
 define RULE_UPDATE_FUNCTION_DEPENDENCIES
 $1/dependencies: ${BUILD_DEPENDENCIES} | $1
-  cp -afr $$(dir $$<)* $$(dir $$@)
+  cp -af $$(dir $$<)* $$(dir $$@)
   rm $$(dir $$@)target
   touch $$@
 endef
