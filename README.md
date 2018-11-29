@@ -126,6 +126,10 @@ It understands the commands:
 
   Build project code into lambda-friendly flat-file artifacts.
 
+- `make validate`
+
+  Ensure SAM is happy with your built template file.
+
 - `make clean`
 
   Remove all build artifacts.

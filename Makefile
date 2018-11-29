@@ -494,6 +494,22 @@ update:
 
 
 ####
+# Command: make validate
+##
+
+# Validate command: make validate
+.PHONY: validate
+COMMANDS += validate
+INFO_UPDATE = Validates your current build template
+export define HELP_UPDATE
+Ensures SAM thinks your template is valid.
+endef
+
+validate: | ${BUILD_CONFIG}
+  sam validate --template ${BUILD_CONFIG}
+
+
+####
 # Command: make help
 ##
 
