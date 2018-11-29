@@ -122,7 +122,9 @@ upcase = $(shell echo "$1" | tr '[:lower:]' '[:upper:]')
 # Upcases first letter of each word
 titleize = $(shell echo "$(call downcase,$1)" | sed -e "s/\b./\u\0/g")
 # Converts $1: pathlist into a camelcased words
-camelize-path = $(foreach path,$(call normalize,$1),$(subst $(space),,$(call titleize,$(subst /,$(space),${path}))))
+camelize-path = $(foreach path,$(call normalize,$1),$(subst $(space),,$(call titleize, \
+  $(subst /,$(space),$(subst _,$(space),$(subst -,$(space),${path}))) \
+)))
 # Converts $1: pathlist into proper lambda function names
 fun-name-from-dir = $(call camelize-path,$(call dir-merge,${APP},$1))
 
