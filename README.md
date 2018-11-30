@@ -130,6 +130,10 @@ It understands the commands:
 
   Ensure SAM is happy with your built template file.
 
+- `make translate`
+
+  View CloudFormation config after applying SAM transforms to your build template file.
+
 - `make clean`
 
   Remove all build artifacts.
