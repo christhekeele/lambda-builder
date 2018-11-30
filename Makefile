@@ -187,7 +187,7 @@ ${CHECK_COMMANDS} ${CHECK_INSTALLED}:
 # Check command: make check
 .PHONY: check
 COMMANDS += check
-INFO_CHECK = Validates current environment can run this makefile
+INFO_CHECK = Checks if current environment can run this Makefile
 export define HELP_CHECK
 ${INFO_CHECK}.
 
@@ -454,25 +454,6 @@ clean:
 
 
 ####
-# Command: make function
-##
-
-# Funtion command: make function
-.PHONY: function
-COMMANDS += function
-INFO_FUNCTION = Prints function names
-export define HELP_FUNCTION
-Prints the AWS resource name of each lambda function.
-
-Can be restricted to only certain functions by specifying:
-FUNCTIONS=path/to/function.file
-endef
-
-function:
-  @echo ${FUNCTION_NAMES}
-
-
-####
 # Command: make update
 ##
 
@@ -503,6 +484,27 @@ endef
 
 validate: | ${BUILD_CONFIG}
   sam validate --template ${BUILD_CONFIG}
+
+
+####
+# Command: make translate
+##
+
+# Translate command: make translate
+.PHONY: translate
+COMMANDS += translate
+INFO_UPDATE = Expands your built SAM template
+export define HELP_UPDATE
+${INFO_CHECK}.
+
+Lets you preview the full Cloudformation template corresponding
+to your current SAM one after applying SAM-specific transforms.
+endef
+
+translate: | ${BUILD_CONFIG}
+  sam validate -t ${BUILD_CONFIG} --debug 2>&1 1>/dev/null
+  | sed '1,/Translated template/d'
+  | grep -v 'is a valid SAM Template'
 
 
 ####
