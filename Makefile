@@ -477,8 +477,8 @@ update:
 # Validate command: make validate
 .PHONY: validate
 COMMANDS += validate
-INFO_UPDATE = Validates your current build template
-export define HELP_UPDATE
+INFO_VALIDATE = Validates your current build template
+export define HELP_VALIDATE
 Ensures SAM thinks your template is valid.
 endef
 
@@ -493,18 +493,18 @@ validate: | ${BUILD_CONFIG}
 # Translate command: make translate
 .PHONY: translate
 COMMANDS += translate
-INFO_UPDATE = Expands your built SAM template
-export define HELP_UPDATE
-${INFO_CHECK}.
+INFO_TRANSLATE = Expands your built SAM template
+export define HELP_TRANSLATE
+${INFO_TRANSLATE}.
 
 Lets you preview the full Cloudformation template corresponding
 to your current SAM one after applying SAM-specific transforms.
 endef
 
 translate: | ${BUILD_CONFIG}
-  sam validate -t ${BUILD_CONFIG} --debug 2>&1 1>/dev/null
-  | sed '1,/Translated template/d'
-  | grep -v 'is a valid SAM Template'
+  sam validate -t ${BUILD_CONFIG} --debug 2>&1 1>/dev/null \
+  | sed '1,/Translated template/d' \
+  | grep -v 'is a valid SAM Template' \
 
 
 ####
