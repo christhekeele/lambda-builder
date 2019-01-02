@@ -1,46 +1,51 @@
-# Variables:
-#  ${FUN}: (pathlike) location of source code in functions folder
-#  ${FUN_NAME}: lambda function's name (${APP_NAME} + titleized ${FUN})
-#  ${PATH}: the path to the function within the functions folder
-#  ${CODE}: the path to the function code within the build folder
-#  All available in master config/template.yml
+# Extra Variables:
+#  ${FUNCTION_NAME}: lambda function name
+#  ${FUNCTION_PATH}: namespace given to function via path in functions folder
+#  ${FUNCTION_SRC}: path to function source code relative to build folder
+#  All available in config/resources.yml
 
-${FUN_NAME}:
+${FUNCTION_NAME}:
   Type: AWS::Serverless::Function
   Properties:
-    CodeUri: ${CODE}
+    CodeUri: ${FUNCTION_SRC}
     Handler: function.handler
+
+    Environment:
+      Variables:
+        FOO: ${FOO}
+        BAR: ${BAR}
+
     Events:
 
-      Touch${FUN_NAME}:
+      Touch${FUNCTION_NAME}:
         Type: Api
         Properties:
-          Path: /${PATH}
+          Path: /${FUNCTION_PATH}
           Method: options
-      TouchExtra${FUN_NAME}:
+      TouchExtra${FUN}:
         Type: Api
         Properties:
-          Path: /${PATH}/{extra+}
+          Path: /${FUNCTION_PATH}/{extra+}
           Method: options
 
-      Get${FUN_NAME}:
+      Get${FUNCTION_NAME}:
         Type: Api
         Properties:
-          Path: /${PATH}
+          Path: /${FUNCTION_PATH}
           Method: get
-      GetExtra${FUN_NAME}:
+      GetExtra${FUN}:
         Type: Api
         Properties:
-          Path: /${PATH}/{extra+}
+          Path: /${FUNCTION_PATH}/{extra+}
           Method: get
 
-      Post${FUN_NAME}:
+      Post${FUNCTION_NAME}:
         Type: Api
         Properties:
-          Path: /${PATH}
+          Path: /${FUNCTION_PATH}
           Method: post
-      PostExtra${FUN_NAME}:
+      PostExtra${FUN}:
         Type: Api
         Properties:
-          Path: /${PATH}/{extra+}
+          Path: /${FUNCTION_PATH}/{extra+}
           Method: post

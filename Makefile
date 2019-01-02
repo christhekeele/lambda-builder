@@ -40,8 +40,6 @@ endif
 
 # Makefile configuration:
 
-# Local artifact output directory
-BUILD_DIR ?= build
 # Silence all output?
 SILENT ?= FALSE
 # Error on missing commands/targets?
@@ -58,34 +56,13 @@ APP_NAME=$(call camelize-path,${APP})
 ENV ?= dev
 ENV_NAME=$(call camelize-path,${ENV})
 
-# Who is executing this build script?
-AUTHOR ?= $(shell \
-  echo $$(aws iam get-user --query "User.UserName") \
-  | sed -e 's/^"//' -e 's/"$$//' \
-)
+BUILD_DIR ?= build
+${BUILD_DIR}/:
+  mkdir -p $@
 
-# Files to recognize:
-
-# Which files to assume are functions
-FUNCTIONS ?= $(shell \
-  mkdir -p functions; \
-  find functions \
-    -type f \
-    -iname "*.py" \
-    ! -iname "__init__.py" \
-    ! -path "__pycache__" \
-    -print \
-)
-# Which files to assume are library files
-LIBRARIES ?= $(shell \
-  mkdir -p lib; \
-  find lib \
-    -type f \
-    -iname "*.py" \
-    ! -path "__pycache__" \
-    -print \
-)
-
+CACHE_DIR ?= ${BUILD_DIR}/cache
+${CACHE_DIR}:
+  mkdir -p $@
 
 #####################
 # UTILITY FUNCTIONS:
@@ -132,13 +109,78 @@ fun-name-from-dir = $(call camelize-path,$(call dir-merge,${APP},$1))
 hash = $(shell TMP="$$(openssl sha1 <(printf '$1'))"; echo $${TMP/* })
 
 
-###################
-# BUILD META-DATA:
-##################
+#########
+# SETUP:
+########
 
-BUILD_TIME=$(now)
-BUILD_NAME=${AUTHOR}/${BUILD_TIME}/${ENV_NAME}/${APP_NAME}
-BUILD_HASH=$(call hash,${BUILD_NAME})
+# CACHE
+
+# Capture author name to minimize network calls
+
+cache-author = $(shell \
+  mkdir -p $(dir $1); \
+  if [ ! -f $1 ]; then \
+    echo $$(aws iam get-user --query "User.UserName") \
+    | sed -e 's/^"//' -e 's/"$$//' \
+    > $1; \
+  fi \
+)
+CACHE_AUTHOR = ${CACHE_DIR}/author
+${CACHE_AUTHOR}: | ${CACHE_DIR}
+  $(call cache-author,$@)
+
+# Capture environment as it changes between runs
+
+cache-env = $(shell \
+  mkdir -p $(dir $1); \
+  if [ ! -f $1 ] || [[ $$(cat $1) != $$(env | grep -E '^[A-Z][_A-Za-z]*?=.*$$' | sort) ]]; then \
+    env | grep -E '^[A-Z][_A-Za-z]*?=.*$$' | sort > $1; \
+  fi \
+)
+# In fact, capture it every run
+CACHE_ENV = ${CACHE_DIR}/env
+$(call cache-env,${CACHE_ENV})
+# Since we do this at build time every time,
+# this rule will never need to run--just here for rigor
+${CACHE_ENV}: | ${CACHE_DIR}
+  $(call cache-env,$@)
+
+# FUNCTIONS
+
+FUNCTIONS ?= $(shell \
+  mkdir -p functions; \
+  find functions \
+    -type f \
+    -iname "*.py" \
+    ! -iname "__init__.py" \
+    ! -path "__pycache__" \
+    -print \
+)
+
+# Install sample function if none exist
+ifeq (,${FUNCTIONS})
+FUNCTIONS=functions/hello/world.py
+endif
+FUNCTION_FILES = $(call normalize,$(call split-list,${FUNCTIONS}))
+FUNCTION_PATHS = $(patsubst functions/%,%,${FUNCTION_FILES})
+FUNCTION_DIRS = $(basename ${FUNCTION_PATHS})
+FUNCTION_NAMES = $(foreach function_dir,${FUNCTION_DIRS}, \
+  $(call camelize-path,${function_dir}) \
+) \
+
+# LIBRARIES
+
+LIBRARIES ?= $(shell \
+  mkdir -p lib; \
+  find lib \
+    -type f \
+    -iname "*.py" \
+    ! -path "__pycache__" \
+    -print \
+)
+
+LIBRARY_FILES = $(call normalize,$(call split-list,${LIBRARIES}))
+LIBRARY_PATHS = $(patsubst lib/%,%,${LIBRARY_FILES})
 
 
 ###########
@@ -155,14 +197,14 @@ SUBCOMMANDS += check-executables
 CHECK_SUBCOMMANDS += check-executables
 
 # Builtins we can't use `type -p` on with
-CHECK_BUILTINS += echo exit set pwd type 
+CHECK_BUILTINS += echo exit set pwd type
 
-# Portable bash commands all tooling assumes exists
-CHECK_COMMANDS += cat cp curl find 
-CHECK_COMMANDS += mkdir sed touch
+# Portable bash commands our tooling assumes exists
+CHECK_COMMANDS += cat cp curl env find
+CHECK_COMMANDS += mkdir sed tee touch
 
 # Installable programs used in this Makefile
-CHECK_INSTALLED += git openssl zip
+CHECK_INSTALLED += envsubst git openssl
 # Installable programs needed by bin/install
 CHECK_INSTALLED += docker pip
 # Installable programs needed by bin/run+bin/deploy
@@ -232,6 +274,8 @@ PROJECT_TOOLING += functions/__init__.py
 PROJECT_STARTER += README.md
 PROJECT_STARTER += requirements.txt
 PROJECT_STARTER += functions/hello/world.py 
+PROJECT_STARTER += functions/hello/mom.py 
+PROJECT_STARTER += functions/hello/mom.yml 
 PROJECT_STARTER += lib/api/routes.py
 
 PROJECT_FILES += ${PROJECT_TOOLING}
@@ -250,31 +294,18 @@ ${PROJECT_FILES}:
 # Command: make build
 ##
 
-# Install sample function if none exist
-ifeq (,${FUNCTIONS})
-FUNCTIONS=functions/hello/world.py
-endif
-FUNCTION_FILES = $(call normalize,$(call split-list,${FUNCTIONS}))
-FUNCTION_PATHS = $(patsubst functions/%,%,${FUNCTION_FILES})
-FUNCTION_DIRS = $(basename ${FUNCTION_PATHS})
-FUNCTION_NAMES = $(foreach function_dir,${FUNCTION_DIRS}, \
-  $(call camelize-path,${function_dir}) \
-) \
-
-BUILD_FUNCTION_DIR = $(call dir-merge,${BUILD_DIR},functions)
-BUILD_FUNCTION_DIRS = $(call dir-merge,${BUILD_FUNCTION_DIR},${FUNCTION_DIRS})
-
-${BUILD_DIR}/:
-  mkdir -p $@
-${BUILD_FUNCTION_DIR}: | ${BUILD_DIR}/
-  mkdir -p $@
-${BUILD_FUNCTION_DIRS}: | ${BUILD_FUNCTION_DIR}
-  mkdir -p $@
-
 # BUILD subcommand: make build-functions
 .PHONY: build-functions
 SUBCOMMANDS += build-functions
 BUILD_SUBCOMMANDS += build-functions
+
+BUILD_FUNCTION_DIR = $(call dir-merge,${BUILD_DIR},functions)
+BUILD_FUNCTION_DIRS = $(call dir-merge,${BUILD_FUNCTION_DIR},${FUNCTION_DIRS})
+
+${BUILD_FUNCTION_DIR}: | ${BUILD_DIR}/
+  mkdir -p $@
+${BUILD_FUNCTION_DIRS}: | ${BUILD_FUNCTION_DIR}
+  mkdir -p $@
 
 BUILD_FUNCTIONS = $(addsuffix /function.py,${BUILD_FUNCTION_DIRS})
 build-functions: ${BUILD_FUNCTIONS}
@@ -287,9 +318,6 @@ ${BUILD_FUNCTIONS}: ${BUILD_FUNCTION_DIR}/%/function.py: functions/%.py | ${BUIL
 .PHONY: build-libraries
 SUBCOMMANDS += build-libraries
 BUILD_SUBCOMMANDS += build-libraries
-
-LIBRARY_FILES = $(call normalize,$(call split-list,${LIBRARIES}))
-LIBRARY_PATHS = $(patsubst lib/%,%,${LIBRARY_FILES})
 
 BUILD_FUNCTION_LIBRARIES = $(call dir-merge,${BUILD_FUNCTION_DIRS},${LIBRARY_PATHS})
 build-libraries: ${BUILD_FUNCTION_LIBRARIES}
@@ -321,7 +349,7 @@ ${BUILD_DEPENDENCIES}: requirements.txt | ${BUILD_DIR}/ bin/install/deps
 define RULE_UPDATE_FUNCTION_DEPENDENCIES
 $1/dependencies: ${BUILD_DEPENDENCIES} | $1
   cp -af $$(dir $$<)* $$(dir $$@)
-  rm $$(dir $$@)target
+  rm -f $$(dir $$@)target
   touch $$@
 endef
 
@@ -330,28 +358,28 @@ $(foreach build_function_dir,${BUILD_FUNCTION_DIRS}, \
 ) \
 
 
-# BUILD subcommand: make build-packages
-.PHONY: build-packages
-SUBCOMMANDS += build-packages
-BUILD_SUBCOMMANDS += build-packages
+# # BUILD subcommand: make build-packages
+# .PHONY: build-packages
+# SUBCOMMANDS += build-packages
+# BUILD_SUBCOMMANDS += build-packages
 
-BUILD_PACKAGES = $(addsuffix .zip,$(call dir-merge,${BUILD_FUNCTION_DIR},$(call fun-name-from-dir,${FUNCTION_DIRS})))
-build-packages: ${BUILD_PACKAGES}
+# BUILD_PACKAGES = $(addsuffix .zip,$(call dir-merge,${BUILD_FUNCTION_DIR},$(call fun-name-from-dir,${FUNCTION_DIRS})))
+# build-packages: ${BUILD_PACKAGES}
 
-define RULE_BUILD_FUNCTION_PACKAGE
-# Zip func dir ($2) into functions folder, named ($1) after function 
-${BUILD_FUNCTION_DIR}/$1.zip: ${BUILD_FUNCTION_DIR}/$2 | ${BUILD_FUNCTION_DIR}
-  cd ${BUILD_FUNCTION_DIR}/$2; \
-  zip -rq9 $$(abspath $$@) * \
-    -x **/*.pyc \
-    -x **/__pycache__/ \
-    -x **/__pycache__/**/*
-endef
+# define RULE_BUILD_FUNCTION_PACKAGE
+# # Zip func dir ($2) into functions folder, named ($1) after function 
+# ${BUILD_FUNCTION_DIR}/$1.zip: ${BUILD_FUNCTION_DIR}/$2 | ${BUILD_FUNCTION_DIR}
+#   cd ${BUILD_FUNCTION_DIR}/$2; \
+#   zip -rq9 $$(abspath $$@) * \
+#     -x **/*.pyc \
+#     -x **/__pycache__/ \
+#     -x **/__pycache__/**/*
+# endef
 
-$(foreach function_dir,${FUNCTION_DIRS}, \
-  $(eval $(call RULE_BUILD_FUNCTION_PACKAGE,$(call fun-name-from-dir,${function_dir}),${function_dir}, \
-  )) \
-) \
+# $(foreach function_dir,${FUNCTION_DIRS}, \
+#   $(eval $(call RULE_BUILD_FUNCTION_PACKAGE,$(call fun-name-from-dir,${function_dir}),${function_dir}, \
+#   )) \
+# ) \
 
 
 # BUILD subcommand: make build-config
@@ -361,13 +389,13 @@ BUILD_SUBCOMMANDS += build-config
 
 BUILD_FUNCTION_CONFIGS = $(addsuffix /function.yml,${BUILD_FUNCTION_DIRS})
 
-BUILD_CONFIG = ${BUILD_FUNCTION_DIR}/template.yml
+BUILD_CONFIG = ${BUILD_DIR}/template.yml
 build-config: ${BUILD_CONFIG}
 
-${BUILD_CONFIG}: ${BUILD_PACKAGES}
+${BUILD_CONFIG}: BUILD_TIME=$(now)
+${BUILD_CONFIG}: ${CACHE_ENV} ${CACHE_AUTHOR}
 ${BUILD_CONFIG}: config/template.yml config/resources.yml
 ${BUILD_CONFIG}: ${BUILD_FUNCTION_CONFIGS}
-${BUILD_CONFIG}: %/template.yml: | %
   @echo '$(hash-literal) Generated at ${BUILD_TIME}' > $@
   @echo '' >> $@
 
@@ -383,23 +411,20 @@ ${BUILD_CONFIG}: %/template.yml: | %
 # Replace function-specific variables as we append functions
   $(foreach function_dir,${FUNCTION_DIRS}, \
     cat ${BUILD_FUNCTION_DIR}/${function_dir}/function.yml \
-    | sed 's|\$${FUN_NAME}|$(call fun-name-from-dir,${function_dir})Function|g' \
-    | sed 's|\$${PATH}|${function_dir}|g' \
-    | sed 's|\$${CODE}|$(call fun-name-from-dir,${function_dir}).zip|g' \
+    | sed 's|\$${FUNCTION_NAME}|$(call fun-name-from-dir,${function_dir})Function|g' \
+    | sed 's|\$${FUNCTION_PATH}|${function_dir}|g' \
+    | sed 's|\$${FUNCTION_SRC}|$(call dir-merge,functions,${function_dir})|g' \
     | sed 's/\(.*\)/  \1/' \
     >> $@;  \
     echo '' >> $@; \
   )
 
 # Replace template-wide variables in-place on finished file
-  sed -i 's|\$${APP}|${APP}|g' $@
-  sed -i 's|\$${APP_NAME}|$(call camelize-path,${APP})|g' $@
-  sed -i 's|\$${ENV}|${ENV}|g' $@
-  sed -i 's|\$${ENV_NAME}|$(call camelize-path,${ENV})|g' $@
-  sed -i 's|\$${BUILD_TIME}|${BUILD_TIME}|g' $@
-  sed -i 's|\$${BUILD_NAME}|${BUILD_NAME}|g' $@
-  sed -i 's|\$${BUILD_HASH}|${BUILD_HASH}|g' $@
-  sed -i 's|\$${AUTHOR}|${AUTHOR}|g' $@
+  sed -i 's|\$${BUILD_HASH}|$(call hash,$(shell cat ${CACHE_AUTHOR})/${BUILD_TIME}/${ENV_NAME}/${APP_NAME})|g' $@
+  sed -i 's|\$${BUILD_AUTHOR}|$(shell cat ${CACHE_AUTHOR})|g' $@
+
+# Expand any other variables against current environment
+  cat $@ | envsubst "$$(cat ${CACHE_ENV} | sed -E 's/^(.*?)=.*$$/\$$\1/g')" | tee $@ > /dev/null
 
 define RULE_BUILD_FUNCTION_CONFIG
 # If function lacks its own config, use template
@@ -441,16 +466,35 @@ build: ${BUILD_SUBCOMMANDS} | ${BUILD_DIR}/dependencies
 # Command: make clean
 ##
 
+# CLEAN subcommand: make clean-cache
+.PHONY: clean-cache
+SUBCOMMANDS += clean-cache
+CLEAN_SUBCOMMANDS += clean-cache
+
+clean-cache:
+  rm -rf ${CACHE_DIR}
+
+
+# CLEAN subcommand: make clean-build
+.PHONY: clean-build
+SUBCOMMANDS += clean-build
+CLEAN_SUBCOMMANDS += clean-build
+
+clean-build:
+  rm -rf ${BUILD_DIR}
+
+
 # Clean command: make clean
 .PHONY: clean
 COMMANDS += clean
-INFO_CLEAN = Removes build artifacts
+INFO_CLEAN = Removes all artifacts
 export define HELP_CLEAN
-Destroys the ${BUILD_DIR} directory.
+Destroys artifact directories.
+
+SUBCOMMANDS: ${CLEAN_SUBCOMMANDS}
 endef
 
-clean:
-  rm -rf build
+clean: ${CLEAN_SUBCOMMANDS}
 
 
 ####
@@ -543,6 +587,7 @@ ${HELP_COMMANDS}: help-command-%:
   @echo USAGE: make $*
   @echo ''
   @echo "$$HELP_$(call upcase,$*)"
+
 
 ####
 # Catch-all commands

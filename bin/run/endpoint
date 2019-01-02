@@ -17,7 +17,7 @@ else
   verbosity_flags=""
 fi
 
-template=build/functions/template.yml
+template=build/template.yml
 if [ ! -f $template ]; then
   make build $template
 fi

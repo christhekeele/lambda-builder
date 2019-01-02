@@ -1,0 +1,15 @@
+# Extra Variables:
+#  All available in config/function.yml
+
+${FUNCTION_NAME}:
+  Type: AWS::Serverless::Function
+  Properties:
+    CodeUri: ${FUNCTION_SRC}
+    Handler: function.handler
+
+    Events:
+      Get${FUNCTION_NAME}:
+        Type: Api
+        Properties:
+          Path: /${FUNCTION_PATH}
+          Method: get

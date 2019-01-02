@@ -1,3 +1,4 @@
+import os
 import json # stdlib import
 import requests # req import
 from api.routes import base # lib import
@@ -22,6 +23,8 @@ def handler(event, _context):
     
     # Stdlib function: json.dumps()
     result = json.dumps({
+        'hello': 'world',
+        'foo:': os.environ.get('FOO'),
         'pokemon': response, # Echo request response
         'event': event, # Echo received event
     })

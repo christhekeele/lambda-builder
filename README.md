@@ -24,6 +24,8 @@ packages from homebrew:
 ```bash
 brew install make --with-default-names
 brew install gnu-sed --with-default-names
+brew install gettext
+brew link --force gettext
 ```
 
 Similarly you may need to expose the proper version of `pip`:

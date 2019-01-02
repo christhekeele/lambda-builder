@@ -1,16 +1,45 @@
 #!/usr/bin/env bash
 set -e # Fail script if any command fails
 
-export BUILD_ENV=${BUILD_ENV:-dev}
-
-if [ $# -ne 0 ] && [[ "$1" == help ]]; then
+if [ $# -ne 0 ] && ([[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]); then
 cat <<HELP
+Zips lambda project to S3 and deploys to stack.
+
+Usage: $(/usr/bin/basename $0) [-h,--help|-f,--force]
 HELP
 exit 0
 fi
 
-(
-  [[ "$ECHO" == FALSE ]] || set -x # Echo main command
+bucket=knock-attribution-service-lambda-prod
+template=build/template.yml
+outputTemplate=build/packaged.yml
 
-  aws iam get-user --query "User.UserName"
-)
+# check if template exists
+if [ ! -f $template ]; then
+  make build $template
+fi
+
+# TODO: check if S3 bucket exists
+
+if [[ "$1" != "-f" ]] && [[ "$1" != "--force" ]]; then
+cat <<EOF
+Deploy was not performed because neither -f nor --force flag was not supplied
+EOF
+exit 1
+fi
+
+echo "Packaging and uploading to S3 Bucket $bucket"
+sam package \
+  --template-file "$template" \
+  --output-template-file "$outputTemplate" \
+  --s3-bucket $bucket \
+  > /dev/null
+
+#region=us-west-2
+#stack=knock-attribution-service-prod
+#echo "Deploying to $stack"
+#sam deploy \
+#        --template-file "$buildDir/packaged.yml" \
+#        --stack-name  $stack \
+#        --capabilities CAPABILITY_IAM \
+#        --region $region
